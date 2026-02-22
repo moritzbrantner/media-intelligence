@@ -79,6 +79,28 @@ See: [`services/INGESTION.md`](../services/INGESTION.md)
 
 ---
 
+### 1b. Web Parsing Service
+**Responsibility**: Fetch and render websites, then extract normalized text, links, images, and audio URLs for downstream NLP and indexing.
+
+**Inputs**: Web URL jobs (direct URLs, RSS discovered links, source adapters)
+**Outputs**: `WebDocument` payload containing canonical URL, main text, link graph, image assets, audio assets
+**Publishes to**: `queue: content.extracted`
+
+See: [`services/WEB_PARSING.md`](../services/WEB_PARSING.md)
+
+---
+
+### 1c. Archiving Service
+**Responsibility**: Archive source pages for reproducibility and legal/compliance traceability using a self-hosted ArchiveBox instance.
+
+**Inputs**: URL + crawl metadata from ingestion/parsing stages
+**Outputs**: Archived snapshots (WARC/HTML/assets) and archive IDs persisted to metadata storage
+**Publishes to**: optional `queue: content.archived` notifications
+
+See: [`services/ARCHIVING.md`](../services/ARCHIVING.md)
+
+---
+
 ### 2. Transcription Service
 **Responsibility**: Convert audio/video to time-stamped, speaker-labeled transcript segments.
 
@@ -146,7 +168,7 @@ All queue messages follow this envelope:
   "source_id": "unique ID of the original media object",
   "payload_location": "minio://bucket/path/to/payload.json",
   "metadata": {
-    "source_type": "youtube | twitter | substack | pdf | text | rss",
+    "source_type": "youtube | twitter | substack | pdf | text | rss | website",
     "retry_count": 0
   }
 }

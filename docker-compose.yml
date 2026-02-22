@@ -179,6 +179,18 @@ services:
   #     elasticsearch:
   #       condition: service_healthy
 
+  # archivebox:
+  #   image: archivebox/archivebox:latest
+  #   command: server --quick-init 0.0.0.0:8000
+  #   environment:
+  #     ALLOWED_HOSTS: "*"
+  #   volumes:
+  #     - archivebox_data:/data
+  #   ports:
+  #     - "${ARCHIVEBOX_PORT:-8000}:8000"
+
 volumes:
   minio_data:
   es_data:
+  archivebox_data:
+

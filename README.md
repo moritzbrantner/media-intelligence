@@ -45,7 +45,9 @@ media-intelligence/
 │   ├── OCR.md                       ← Frame extraction & OCR service spec
 │   ├── ENRICHMENT.md                ← NLP enrichment service spec
 │   ├── PROFILING.md                 ← Entity profiling service spec
-│   └── INDEXER.md                   ← Elasticsearch indexing service spec
+│   ├── INDEXER.md                   ← Elasticsearch indexing service spec
+│   ├── WEB_PARSING.md               ← Website parsing service spec (text/links/images/audio)
+│   └── ARCHIVING.md                 ← Website archiving service spec (ArchiveBox)
 └── infrastructure/
     └── INFRASTRUCTURE.md            ← Storage, queues, deployment
 ```
@@ -76,6 +78,8 @@ media-intelligence/
 | Layer | Technology |
 |---|---|
 | Ingestion | Python, `yt-dlp`, `tweepy`, `requests` |
+| Web Parsing | Playwright + Trafilatura + BeautifulSoup/lxml |
+| Archiving | ArchiveBox (self-hosted) |
 | Storage | MinIO (S3-compatible) |
 | Queue | Redis + Celery |
 | Transcription | WhisperX, `pyannote.audio` |
