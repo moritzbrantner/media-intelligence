@@ -22,7 +22,8 @@ media-intelligence/
 │   ├── ARCHITECTURE.md              ← System design & data flow
 │   ├── DATA_MODELS.md               ← Elasticsearch schemas & entity models
 │   ├── CONTRIBUTING.md              ← How to contribute & agent instructions
-│   └── ROADMAP.md                   ← Phased feature roadmap
+│   ├── ROADMAP.md                   ← Phased feature roadmap
+│   └── IMPLEMENTATION_TASKS.md      ← Execution-ready engineering backlog
 ├── services/
 │   ├── INGESTION.md                 ← Ingestion service spec
 │   ├── TRANSCRIPTION.md             ← Transcription & diarization service spec
