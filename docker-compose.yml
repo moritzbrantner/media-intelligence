@@ -1,171 +1,171 @@
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "${REDIS_PORT:-6379}:6379"
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # minio:
+  #   image: minio/minio:latest
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+  #   ports:
+  #     - "${MINIO_API_PORT:-9000}:9000"
+  #     - "${MINIO_CONSOLE_PORT:-9001}:9001"
+  #   volumes:
+  #     - minio_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  minio-bootstrap:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
-    restart: "no"
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
-      mc mb --ignore-existing local/raw-media &&
-      mc mb --ignore-existing local/processed &&
-      mc mb --ignore-existing local/frames
+  # minio-bootstrap:
+  #   image: minio/mc:latest
+  #   depends_on:
+  #     minio:
+  #       condition: service_healthy
+  #   restart: "no"
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command: >
+  #     mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
+  #     mc mb --ignore-existing local/raw-media &&
+  #     mc mb --ignore-existing local/processed &&
+  #     mc mb --ignore-existing local/frames
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.12.0}
-    environment:
-      discovery.type: single-node
-      xpack.security.enabled: "false"
-      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
-    ports:
-      - "${ELASTICSEARCH_PORT:-9200}:9200"
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.12.0}
+  #   environment:
+  #     discovery.type: single-node
+  #     xpack.security.enabled: "false"
+  #     ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
+  #   ports:
+  #     - "${ELASTICSEARCH_PORT:-9200}:9200"
+  #   volumes:
+  #     - es_data:/usr/share/elasticsearch/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+  #     interval: 15s
+  #     timeout: 10s
+  #     retries: 10
 
-  kibana:
-    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION:-8.12.0}
-    environment:
-      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-    ports:
-      - "${KIBANA_PORT:-5601}:5601"
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION:-8.12.0}
+  #   environment:
+  #     ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+  #   ports:
+  #     - "${KIBANA_PORT:-5601}:5601"
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
 
-  ingestion:
-    image: python:3.11-slim
-    working_dir: /workspace
-    volumes:
-      - ./:/workspace
-    command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'ingestion service ready' && tail -f /dev/null"]
-    environment:
-      SERVICE_NAME: ingestion
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      minio-bootstrap:
-        condition: service_completed_successfully
-      elasticsearch:
-        condition: service_healthy
+  # ingestion:
+  #   image: python:3.11-slim
+  #   working_dir: /workspace
+  #   volumes:
+  #     - ./:/workspace
+  #   command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'ingestion service ready' && tail -f /dev/null"]
+  #   environment:
+  #     SERVICE_NAME: ingestion
+  #   env_file: .env
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     minio-bootstrap:
+  #       condition: service_completed_successfully
+  #     elasticsearch:
+  #       condition: service_healthy
 
-  transcription:
-    image: python:3.11-slim
-    working_dir: /workspace
-    volumes:
-      - ./:/workspace
-    command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'transcription service ready' && tail -f /dev/null"]
-    environment:
-      SERVICE_NAME: transcription
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      minio-bootstrap:
-        condition: service_completed_successfully
-      elasticsearch:
-        condition: service_healthy
+  # transcription:
+  #   image: python:3.11-slim
+  #   working_dir: /workspace
+  #   volumes:
+  #     - ./:/workspace
+  #   command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'transcription service ready' && tail -f /dev/null"]
+  #   environment:
+  #     SERVICE_NAME: transcription
+  #   env_file: .env
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     minio-bootstrap:
+  #       condition: service_completed_successfully
+  #     elasticsearch:
+  #       condition: service_healthy
 
-  ocr:
-    image: python:3.11-slim
-    working_dir: /workspace
-    volumes:
-      - ./:/workspace
-    command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'ocr service ready' && tail -f /dev/null"]
-    environment:
-      SERVICE_NAME: ocr
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      minio-bootstrap:
-        condition: service_completed_successfully
-      elasticsearch:
-        condition: service_healthy
+  # ocr:
+  #   image: python:3.11-slim
+  #   working_dir: /workspace
+  #   volumes:
+  #     - ./:/workspace
+  #   command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'ocr service ready' && tail -f /dev/null"]
+  #   environment:
+  #     SERVICE_NAME: ocr
+  #   env_file: .env
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     minio-bootstrap:
+  #       condition: service_completed_successfully
+  #     elasticsearch:
+  #       condition: service_healthy
 
-  enrichment:
-    image: python:3.11-slim
-    working_dir: /workspace
-    volumes:
-      - ./:/workspace
-    command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'enrichment service ready' && tail -f /dev/null"]
-    environment:
-      SERVICE_NAME: enrichment
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      minio-bootstrap:
-        condition: service_completed_successfully
-      elasticsearch:
-        condition: service_healthy
+  # enrichment:
+  #   image: python:3.11-slim
+  #   working_dir: /workspace
+  #   volumes:
+  #     - ./:/workspace
+  #   command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'enrichment service ready' && tail -f /dev/null"]
+  #   environment:
+  #     SERVICE_NAME: enrichment
+  #   env_file: .env
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     minio-bootstrap:
+  #       condition: service_completed_successfully
+  #     elasticsearch:
+  #       condition: service_healthy
 
-  profiling:
-    image: python:3.11-slim
-    working_dir: /workspace
-    volumes:
-      - ./:/workspace
-    command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'profiling service ready' && tail -f /dev/null"]
-    environment:
-      SERVICE_NAME: profiling
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      minio-bootstrap:
-        condition: service_completed_successfully
-      elasticsearch:
-        condition: service_healthy
+  # profiling:
+  #   image: python:3.11-slim
+  #   working_dir: /workspace
+  #   volumes:
+  #     - ./:/workspace
+  #   command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'profiling service ready' && tail -f /dev/null"]
+  #   environment:
+  #     SERVICE_NAME: profiling
+  #   env_file: .env
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     minio-bootstrap:
+  #       condition: service_completed_successfully
+  #     elasticsearch:
+  #       condition: service_healthy
 
-  indexer:
-    image: python:3.11-slim
-    working_dir: /workspace
-    volumes:
-      - ./:/workspace
-    command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'indexer service ready' && tail -f /dev/null"]
-    environment:
-      SERVICE_NAME: indexer
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      minio-bootstrap:
-        condition: service_completed_successfully
-      elasticsearch:
-        condition: service_healthy
+  # indexer:
+  #   image: python:3.11-slim
+  #   working_dir: /workspace
+  #   volumes:
+  #     - ./:/workspace
+  #   command: ["/bin/sh", "-c", "./scripts/validate-env.sh && echo 'indexer service ready' && tail -f /dev/null"]
+  #   environment:
+  #     SERVICE_NAME: indexer
+  #   env_file: .env
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     minio-bootstrap:
+  #       condition: service_completed_successfully
+  #     elasticsearch:
+  #       condition: service_healthy
 
 volumes:
   minio_data:
