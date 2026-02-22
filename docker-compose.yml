@@ -1,4 +1,16 @@
 services:
+  mock-service:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: ["python", "scripts/mock_service.py"]
+    environment:
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8080
+    ports:
+      - "${MOCK_SERVICE_PORT:-8080}:8080"
+
   # redis:
   #   image: redis:7-alpine
   #   ports:

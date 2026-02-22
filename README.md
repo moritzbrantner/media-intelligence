@@ -11,6 +11,21 @@ A modular, microservice-based platform for ingesting, transcribing, analyzing, a
 - **Profile** people, organizations, and channels across sources
 - **Index** everything into Elasticsearch for powerful full-text and semantic search
 
+
+## Lightweight Development Mode
+
+To keep local setup fast, `docker-compose.yml` now starts a single `mock-service` by default.
+All heavyweight platform services remain in the compose file but are intentionally commented out.
+
+- Start with Docker (optional): `docker compose up mock-service`
+- Start bare-metal (no Docker): `python scripts/mock_service.py`
+- Health check: `curl http://localhost:${MOCK_SERVICE_PORT:-8080}/health`
+- Example mock data: `curl http://localhost:${MOCK_SERVICE_PORT:-8080}/v1/jobs?limit=5`
+
+If Docker is unavailable in your Codex runtime, that is an environment capability limitation (not a repo setting). In that case, use the bare-metal command above.
+
+When you want to work on a real service, create or switch to its dedicated branch and enable only that service plus dependencies in `docker-compose.yml`.
+
 ---
 
 ## Repository Structure
