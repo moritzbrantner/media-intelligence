@@ -9,8 +9,16 @@
       "end_seconds": { "type": "float" },
       "timestamp_seconds": { "type": "float" },
       "text": { "type": "text", "analyzer": "english" },
+      "chunk_embedding": {
+        "type": "dense_vector",
+        "dims": 768,
+        "index": true,
+        "similarity": "cosine"
+      },
       "published_at": { "type": "date" },
       "source_type": { "type": "keyword" },
+      "topic": { "type": "keyword" },
+      "stance": { "type": "keyword" },
       "provenance": {
         "properties": {
           "origin": { "type": "keyword" },

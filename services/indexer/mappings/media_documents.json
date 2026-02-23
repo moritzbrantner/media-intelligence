@@ -5,7 +5,14 @@
       "source_type": { "type": "keyword" },
       "source_url": { "type": "keyword" },
       "title": { "type": "text", "analyzer": "english" },
+      "body": { "type": "text", "analyzer": "english" },
       "description": { "type": "text", "analyzer": "english" },
+      "document_embedding": {
+        "type": "dense_vector",
+        "dims": 768,
+        "index": true,
+        "similarity": "cosine"
+      },
       "author_name": { "type": "keyword" },
       "author_handle": { "type": "keyword" },
       "channel_name": { "type": "keyword" },
