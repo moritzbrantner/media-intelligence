@@ -1,0 +1,10 @@
+[
+  {
+    "query_argument_id": "q1",
+    "relevant_argument_ids": ["arg-1"]
+  },
+  {
+    "query_argument_id": "q2",
+    "relevant_argument_ids": ["arg-3"]
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "query_argument_id": "q1",
+    "text": "carbon pricing lowers emissions",
+    "topic_id": "climate"
+  },
+  {
+    "query_argument_id": "q2",
+    "text": "battery storage supports grid reliability",
+    "topic_id": "energy"
+  }
+]
