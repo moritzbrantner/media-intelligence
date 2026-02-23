@@ -54,6 +54,25 @@ media-intelligence/
 
 ---
 
+## Development Utilities
+
+Install lightweight dev dependencies (including YAML parsing used by architecture/config validation checks):
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Run YAML validation used by the inference architecture artifacts:
+
+```bash
+./scripts/validate-yaml.sh
+```
+
+If `pip install` fails with proxy/network errors (for example `403 Forbidden`), either:
+
+- use an approved internal package mirror (`PIP_INDEX_URL`) with reachable proxy settings, or
+- run the fallback parser path via Ruby (already supported by `./scripts/validate-yaml.sh`).
+
 ## Quick Start (for Agents)
 
 1. Read `docs/ARCHITECTURE.md` to understand the overall data flow
