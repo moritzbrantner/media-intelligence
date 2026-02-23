@@ -35,11 +35,27 @@ An `EnrichedDocument` stored at `minio://processed/{media_id}/enriched.json`.
 5. **Keyword extraction** — extract keyphrases
 6. **Sentiment analysis** — document-level + per transcript segment
 7. **Topic assignment** — match to topic taxonomy or cluster
-8. **Embedding generation** — encode `full_text` to a dense vector
-9. **Store** `enriched.json` in MinIO
-10. **Publish** `content.enriched` event
+8. **Argument mining** — run after transcript segmentation to emit structured argument units (`argument_id`, `speaker_id`, `topic_id`, `claim_text`, `evidence_spans[]`, `stance`, `confidence`)
+9. **Embedding generation** — encode `full_text` to a dense vector
+10. **Store** `enriched.json` in MinIO
+11. **Publish** `content.enriched` event
 
 ---
+
+### Argument Mining (Baseline)
+
+**Stage**: `argument_mining` (runs after transcript segmentation, before embeddings/indexing)
+
+Baseline behavior:
+
+- Generate **claim candidates** from assertive transcript sentences (rule based).
+- Generate **evidence candidates** from factual/causal markers (`because`, `data shows`, `for example`, `according to`, etc.).
+- Use MNLI-family NLI models (DeBERTa/roberta-large-mnli) to score:
+  - claim ↔ evidence entailment/contradiction
+  - claim ↔ topic entailment/contradiction
+- Use zero-shot classification to label stance (`pro`, `con`, `neutral`) against the debate topic statement.
+- Emit `ArgumentUnit` objects with confidence scores and stable IDs.
+- Apply a **calibration pass** over a manually reviewed sample to tune thresholds and reduce false positives before production rollout.
 
 ## NLP Components
 

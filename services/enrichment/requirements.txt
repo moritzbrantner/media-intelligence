@@ -1,1 +1,2 @@
-# No service-specific dependencies required for the initial mock scaffold.
+# Enrichment service dependencies.
+transformers>=4.40.0
