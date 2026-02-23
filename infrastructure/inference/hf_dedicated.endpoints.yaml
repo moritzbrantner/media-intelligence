@@ -1,0 +1,38 @@
+# Hugging Face Inference Endpoints configuration equivalent to self-hosted model set.
+# Goal: faster provisioning for batch + experimental workloads.
+
+provider: aws
+region: us-east-1
+private_link: enabled
+scale_to_zero: false
+
+endpoints:
+  - name: asr-whisper-large-v3-turbo-hf
+    task: automatic-speech-recognition
+    model_id: openai/whisper-large-v3-turbo
+    instance_type: nvidia-l4-x1
+    min_replicas: 1
+    max_replicas: 4
+    custom_image: huggingface/tei-asr:latest
+    timeout_s: 120
+    auth: token
+
+  - name: nli-deberta-v3-base-hf
+    task: text-classification
+    model_id: MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli
+    instance_type: nvidia-t4-x1
+    min_replicas: 1
+    max_replicas: 4
+    custom_image: huggingface/text-classification-inference:latest
+    timeout_s: 15
+    auth: token
+
+  - name: embedding-bge-base-en-v15-hf
+    task: feature-extraction
+    model_id: BAAI/bge-base-en-v1.5
+    instance_type: nvidia-t4-x1
+    min_replicas: 1
+    max_replicas: 4
+    custom_image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    timeout_s: 10
+    auth: token

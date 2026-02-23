@@ -156,6 +156,23 @@ See: [`services/INDEXER.md`](../services/INDEXER.md)
 
 ---
 
+
+## Inference Hosting Strategy
+
+A dedicated architecture spike comparing self-hosted and Hugging Face hosted inference (latency, throughput, cost, failures, and compliance controls) is documented in:
+
+- [`docs/architecture/INFERENCE_DEPLOYMENT_SPIKE.md`](./architecture/INFERENCE_DEPLOYMENT_SPIKE.md)
+- [`infrastructure/inference/self_hosted.endpoints.yaml`](../infrastructure/inference/self_hosted.endpoints.yaml)
+- [`infrastructure/inference/hf_dedicated.endpoints.yaml`](../infrastructure/inference/hf_dedicated.endpoints.yaml)
+
+Deployment decision from the spike:
+
+- Keep latency-critical ASR self-hosted.
+- Route batch/experimental stance+embedding workloads to HF dedicated endpoints with private networking.
+- Maintain self-hosted fallback endpoints for resilience and regulated data paths.
+
+---
+
 ## Queue Event Schema
 
 All queue messages follow this envelope:

@@ -1,0 +1,69 @@
+# Self-hosted inference endpoints (Kubernetes + KServe/Triton style)
+# Goal: lowest p95 latency for online path.
+
+endpoints:
+  - name: asr-whisper-large-v3-turbo
+    task: automatic-speech-recognition
+    model_id: openai/whisper-large-v3-turbo
+    runtime: faster-whisper
+    accelerator: nvidia-l4
+    replicas:
+      min: 2
+      max: 6
+    concurrency:
+      per_replica: 2
+      autoscale_target: 70
+    request:
+      timeout_s: 120
+      max_audio_seconds: 900
+    network:
+      exposure: private
+      ingress: internal-lb
+      allowed_cidrs: ["10.0.0.0/8"]
+    auth:
+      mode: mTLS
+      service_account_required: true
+
+  - name: nli-deberta-v3-base
+    task: text-classification
+    model_id: MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli
+    runtime: text-generation-inference
+    accelerator: nvidia-t4
+    replicas:
+      min: 2
+      max: 8
+    concurrency:
+      per_replica: 32
+      autoscale_target: 75
+    request:
+      timeout_s: 15
+      max_input_tokens: 512
+    network:
+      exposure: private
+      ingress: internal-lb
+      allowed_cidrs: ["10.0.0.0/8"]
+    auth:
+      mode: mTLS
+      service_account_required: true
+
+  - name: embedding-bge-base-en-v15
+    task: feature-extraction
+    model_id: BAAI/bge-base-en-v1.5
+    runtime: text-embeddings-inference
+    accelerator: nvidia-t4
+    replicas:
+      min: 2
+      max: 8
+    concurrency:
+      per_replica: 64
+      autoscale_target: 75
+    request:
+      timeout_s: 10
+      max_input_tokens: 1024
+    network:
+      exposure: private
+      ingress: internal-lb
+      allowed_cidrs: ["10.0.0.0/8"]
+    auth:
+      mode: mTLS
+      service_account_required: true
