@@ -1,0 +1,1 @@
+# No service-specific dependencies required for the initial mock scaffold.
