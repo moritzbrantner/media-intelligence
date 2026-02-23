@@ -95,6 +95,19 @@ services:
     ports:
       - "${MOCK_INDEXER_PORT:-8086}:8086"
 
+
+
+  mock-source-watcher:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: ["python", "-m", "services.source_watcher.main"]
+    environment:
+      SOURCE_WATCHER_HOST: 0.0.0.0
+      SOURCE_WATCHER_PORT: 8087
+    ports:
+      - "${MOCK_SOURCE_WATCHER_PORT:-8087}:8087"
   # redis:
   #   image: redis:7-alpine
   #   ports:

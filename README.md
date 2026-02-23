@@ -17,7 +17,7 @@ A modular, microservice-based platform for ingesting, transcribing, analyzing, a
 To keep local setup fast, `docker-compose.yml` now ships with HTTP mock services for each core worker.
 All heavyweight platform services remain in the compose file but are intentionally commented out.
 
-- Start all mock services with Docker: `docker compose up mock-service mock-ingestion mock-transcription mock-ocr mock-enrichment mock-profiling mock-indexer`
+- Start all mock services with Docker: `docker compose up mock-service mock-ingestion mock-transcription mock-ocr mock-enrichment mock-profiling mock-indexer mock-source-watcher`
 - Start a single mock service bare-metal: `python services/ingestion/main.py` (swap service name as needed)
 - Base health check: `curl http://localhost:${MOCK_SERVICE_PORT:-8080}/health`
 - Service-specific mock data: `curl http://localhost:${MOCK_INGESTION_PORT:-8081}/v1/jobs?limit=5`
@@ -47,7 +47,8 @@ media-intelligence/
 │   ├── PROFILING.md                 ← Entity profiling service spec
 │   ├── INDEXER.md                   ← Elasticsearch indexing service spec
 │   ├── WEB_PARSING.md               ← Website parsing service spec (text/links/images/audio)
-│   └── ARCHIVING.md                 ← Website archiving service spec (ArchiveBox)
+│   ├── ARCHIVING.md                 ← Website archiving service spec (ArchiveBox)
+│   └── SOURCE_WATCHER.md            ← Source monitoring & update dispatch service spec
 └── infrastructure/
     └── INFRASTRUCTURE.md            ← Storage, queues, deployment
 ```

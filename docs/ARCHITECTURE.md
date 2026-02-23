@@ -101,6 +101,17 @@ See: [`services/ARCHIVING.md`](../services/ARCHIVING.md)
 
 ---
 
+### 1d. Source Watcher Service
+**Responsibility**: Monitor external sources (websites, blogs/RSS, YouTube channels) for new updates and notify downstream consumers or enqueue ingestion jobs.
+
+**Inputs**: Source subscriptions with source type, URL/channel id, polling metadata, and target service endpoints
+**Outputs**: `source.updated` notifications with source metadata and discovered item payload
+**Publishes to**: `queue: source.updated` (or direct webhook notifications)
+
+See: [`services/SOURCE_WATCHER.md`](../services/SOURCE_WATCHER.md)
+
+---
+
 ### 2. Transcription Service
 **Responsibility**: Convert audio/video to time-stamped, speaker-labeled transcript segments.
 
