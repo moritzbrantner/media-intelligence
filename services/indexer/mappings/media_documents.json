@@ -1,0 +1,27 @@
+{
+  "mappings": {
+    "properties": {
+      "media_id": { "type": "keyword" },
+      "source_type": { "type": "keyword" },
+      "source_url": { "type": "keyword" },
+      "title": { "type": "text", "analyzer": "english" },
+      "description": { "type": "text", "analyzer": "english" },
+      "author_name": { "type": "keyword" },
+      "author_handle": { "type": "keyword" },
+      "channel_name": { "type": "keyword" },
+      "published_at": { "type": "date" },
+      "language": { "type": "keyword" },
+      "topics": { "type": "keyword" },
+      "entities": {
+        "type": "nested",
+        "properties": {
+          "text": { "type": "keyword" },
+          "label": { "type": "keyword" }
+        }
+      },
+      "sentiment_label": { "type": "keyword" },
+      "sentiment_score": { "type": "float" },
+      "indexed_at": { "type": "date" }
+    }
+  }
+}
