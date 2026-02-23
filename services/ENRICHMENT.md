@@ -57,6 +57,42 @@ Baseline behavior:
 - Emit `ArgumentUnit` objects with confidence scores and stable IDs.
 - Apply a **calibration pass** over a manually reviewed sample to tune thresholds and reduce false positives before production rollout.
 
+### Argument Retrieval Subsystem (Similarity + Related Content)
+
+**Stage**: `argument_retrieval` (runs after argument extraction, before indexing/API serving)
+
+Implemented capabilities:
+
+1. **Argument-level embedding**
+   - Encode each argument unit as `claim_text + concise context` using HuggingFace sentence embeddings.
+   - Primary defaults: `BAAI/bge-base-en-v1.5` (bi-encoder) with `sentence-transformers` runtime.
+2. **Vector indexing keyed by `argument_id`**
+   - Supports FAISS (`IndexFlatIP` on normalized embeddings) when available.
+   - Falls back to a NumPy cosine-similarity index for lightweight local/dev execution.
+3. **Two-stage retrieval**
+   - Stage A: ANN top-K candidate retrieval by bi-encoder cosine similarity.
+   - Stage B: HF cross-encoder reranking (`cross-encoder/ms-marco-MiniLM-L-12-v2`) for pairwise relevance.
+4. **Hybrid ranking features**
+   - Final score combines:
+     - semantic (bi-encoder) similarity,
+     - cross-encoder relevance,
+     - stance signal (same/opposite stance aware),
+     - topical overlap,
+     - recency decay.
+5. **API/UI-ready filters**
+   - Query supports filtering by:
+     - `topic`,
+     - `stance`,
+     - `speaker`,
+     - `date range`,
+     - `source type`.
+6. **Offline relevance benchmarking**
+   - Curated "similar argument" query sets evaluate retrieval quality.
+   - Built-in metrics: `HitRate@K` and `MRR` (mean reciprocal rank).
+
+See implementation details in `services/enrichment/retrieval.py` and tests in
+`services/enrichment/tests/test_retrieval.py`.
+
 ## NLP Components
 
 ### Named Entity Recognition (NER)
