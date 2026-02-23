@@ -11,6 +11,90 @@ services:
     ports:
       - "${MOCK_SERVICE_PORT:-8080}:8080"
 
+  mock-ingestion:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: ["python", "services/ingestion/main.py"]
+    environment:
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8081
+      SERVICE_NAME: mock-ingestion
+      MOCK_SOURCE: ingestion
+    ports:
+      - "${MOCK_INGESTION_PORT:-8081}:8081"
+
+  mock-transcription:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: ["python", "services/transcription/main.py"]
+    environment:
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8082
+      SERVICE_NAME: mock-transcription
+      MOCK_SOURCE: transcription
+    ports:
+      - "${MOCK_TRANSCRIPTION_PORT:-8082}:8082"
+
+  mock-ocr:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: ["python", "services/ocr/main.py"]
+    environment:
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8083
+      SERVICE_NAME: mock-ocr
+      MOCK_SOURCE: ocr
+    ports:
+      - "${MOCK_OCR_PORT:-8083}:8083"
+
+  mock-enrichment:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: ["python", "services/enrichment/main.py"]
+    environment:
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8084
+      SERVICE_NAME: mock-enrichment
+      MOCK_SOURCE: enrichment
+    ports:
+      - "${MOCK_ENRICHMENT_PORT:-8084}:8084"
+
+  mock-profiling:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: ["python", "services/profiling/main.py"]
+    environment:
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8085
+      SERVICE_NAME: mock-profiling
+      MOCK_SOURCE: profiling
+    ports:
+      - "${MOCK_PROFILING_PORT:-8085}:8085"
+
+  mock-indexer:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: ["python", "services/indexer/main.py"]
+    environment:
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8086
+      SERVICE_NAME: mock-indexer
+      MOCK_SOURCE: indexer
+    ports:
+      - "${MOCK_INDEXER_PORT:-8086}:8086"
+
   # redis:
   #   image: redis:7-alpine
   #   ports:

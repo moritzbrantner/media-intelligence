@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Tiny mock service for local development and testing."""
+"""Tiny reusable mock service for local development and testing."""
+
+from __future__ import annotations
 
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -9,10 +11,13 @@ from urllib.parse import parse_qs, urlparse
 
 HOST = os.getenv("MOCK_SERVICE_HOST", "0.0.0.0")
 PORT = int(os.getenv("MOCK_SERVICE_PORT", "8080"))
+SERVICE_NAME = os.getenv("SERVICE_NAME", os.getenv("MOCK_SERVICE_NAME", "mock-service"))
+SOURCE_NAME = os.getenv("MOCK_SOURCE", SERVICE_NAME.replace("mock-", ""))
 
 
 class MockHandler(BaseHTTPRequestHandler):
-    service_name = "mock-service"
+    service_name = SERVICE_NAME
+    source_name = SOURCE_NAME
 
     def _write_json(self, payload: dict, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload).encode("utf-8")
@@ -40,13 +45,25 @@ class MockHandler(BaseHTTPRequestHandler):
             limit = int(query.get("limit", ["3"])[0])
             jobs = [
                 {
-                    "job_id": f"mock-job-{idx}",
+                    "job_id": f"{self.service_name}-job-{idx}",
                     "state": "queued",
-                    "source": "youtube",
+                    "source": self.source_name,
                 }
                 for idx in range(1, max(1, min(limit, 25)) + 1)
             ]
             self._write_json({"jobs": jobs})
+            return
+
+        if parsed.path == "/v1/events":
+            self._write_json(
+                {
+                    "service": self.service_name,
+                    "events": [
+                        {"event_type": "mock.started", "status": "ok"},
+                        {"event_type": "mock.heartbeat", "status": "ok"},
+                    ],
+                }
+            )
             return
 
         self._write_json(
