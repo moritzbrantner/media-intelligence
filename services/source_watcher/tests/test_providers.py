@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timezone
 
 from services.source_watcher.models import CheckState, SourceSubscription
-from services.source_watcher.providers import RssProvider
+from services.source_watcher.providers import RssProvider, ToolFeedProvider
 
 
 class StubResponse:
@@ -43,3 +43,43 @@ def test_rss_provider_detects_new_item(monkeypatch) -> None:
     assert update["update_id"] == "abc"
     assert update["published_at"].tzinfo == timezone.utc
     assert next_state.last_update_id == "abc"
+
+
+def test_tool_feed_provider_detects_social_channel_updates(monkeypatch) -> None:
+    provider = ToolFeedProvider()
+    subscription = SourceSubscription(
+        source_id="yt-channel",
+        source_type="youtube",
+        source_url="https://www.youtube.com/@example/videos",
+        target_services=["https://consumer.local/hook"],
+    )
+
+    def fake_load_feed(source_url: str):
+        return {
+            "title": "Example Channel",
+            "entries": [
+                {
+                    "id": "video-123",
+                    "title": "Latest upload",
+                    "timestamp": 1708423200,
+                    "webpage_url": "https://youtube.com/watch?v=video-123",
+                    "url": "https://media.example/video-123.mp4",
+                    "channel": "Example Channel",
+                    "channel_id": "UC123",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(provider, "_load_feed", fake_load_feed)
+
+    update, state = provider.check_for_update(subscription, CheckState())
+    assert update is not None
+    assert update["update_id"] == "video-123"
+    assert update["payload"]["platform"] == "youtube"
+    assert update["payload"]["download_url"] == "https://media.example/video-123.mp4"
+    assert update["published_at"].tzinfo == timezone.utc
+    assert state.last_update_id == "video-123"
+
+    update_again, next_state = provider.check_for_update(subscription, state)
+    assert update_again is None
+    assert next_state.last_update_id == "video-123"

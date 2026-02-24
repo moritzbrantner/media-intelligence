@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 import email.utils
+import json
+import subprocess
 from typing import Any
 from urllib.parse import quote_plus
 from xml.etree import ElementTree
@@ -132,6 +134,71 @@ class YouTubeProvider(RssProvider):
         return super().check_for_update(yt_subscription, state)
 
 
+class ToolFeedProvider(SourceProvider):
+    """Detect updates from social platforms via yt-dlp extractor metadata."""
+
+    SUPPORTED_TYPES = {"youtube", "twitter", "x", "facebook"}
+
+    def supports(self, source_type: str) -> bool:
+        return source_type in self.SUPPORTED_TYPES
+
+    def check_for_update(
+        self, subscription: SourceSubscription, state: CheckState
+    ) -> tuple[dict[str, Any] | None, CheckState]:
+        feed = self._load_feed(subscription.source_url)
+        entries = feed.get("entries") or []
+        latest = entries[0] if entries else None
+        if latest is None:
+            return None, state
+
+        update_id = latest.get("id") or latest.get("url") or latest.get("webpage_url")
+        if not update_id:
+            return None, state
+
+        next_state = CheckState(last_update_id=str(update_id))
+        if next_state.last_update_id == state.last_update_id:
+            return None, next_state
+
+        channel = latest.get("channel") or feed.get("channel") or feed.get("uploader")
+        uploader_id = latest.get("uploader_id") or feed.get("uploader_id")
+        platform = subscription.source_type
+
+        return (
+            {
+                "update_id": str(update_id),
+                "title": latest.get("title") or feed.get("title"),
+                "published_at": _parse_unix_timestamp(latest.get("timestamp")),
+                "payload": {
+                    "tool": "yt-dlp",
+                    "download_url": latest.get("url") or latest.get("webpage_url"),
+                    "webpage_url": latest.get("webpage_url"),
+                    "platform": platform,
+                    "channel_name": channel,
+                    "channel_id": latest.get("channel_id") or feed.get("channel_id"),
+                    "uploader_id": uploader_id,
+                    "raw_entry": latest,
+                },
+            },
+            next_state,
+        )
+
+    def _load_feed(self, source_url: str) -> dict[str, Any]:
+        result = subprocess.run(
+            [
+                "yt-dlp",
+                "--dump-single-json",
+                "--flat-playlist",
+                "--playlist-end",
+                "1",
+                source_url,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return json.loads(result.stdout)
+
+
 def _extract_first_feed_item(root: ElementTree.Element) -> dict[str, Any] | None:
     namespaces = {
         "atom": "http://www.w3.org/2005/Atom",
@@ -192,3 +259,12 @@ def _parse_http_date(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _parse_unix_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return None

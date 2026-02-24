@@ -9,14 +9,14 @@ import json
 import os
 
 from .notifier import WebhookNotifier
-from .providers import RssProvider, WebsiteProvider, YouTubeProvider
+from .providers import RssProvider, ToolFeedProvider, WebsiteProvider, YouTubeProvider
 from .service import SourceWatcherService, parse_subscription, serialize_update
 
 HOST = os.getenv("SOURCE_WATCHER_HOST", "0.0.0.0")
 PORT = int(os.getenv("SOURCE_WATCHER_PORT", "8087"))
 
 SERVICE = SourceWatcherService(
-    providers=[YouTubeProvider(), RssProvider(), WebsiteProvider()],
+    providers=[ToolFeedProvider(), YouTubeProvider(), RssProvider(), WebsiteProvider()],
     notifier=WebhookNotifier(),
 )
 

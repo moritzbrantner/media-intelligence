@@ -8,7 +8,9 @@ This service is designed for polling-based sources like:
 
 - Websites (ETag / Last-Modified)
 - Blogs and RSS/Atom feeds
-- YouTube channels (via channel RSS)
+- YouTube channels (RSS or `yt-dlp` channel extraction)
+- X/Twitter accounts (via `yt-dlp`)
+- Facebook pages/profiles (via `yt-dlp`)
 
 ---
 
@@ -61,8 +63,12 @@ This service is designed for polling-based sources like:
 - Track the latest `guid`/`id` to detect new content.
 
 ### YouTube Channel
-- Resolve channel RSS feed from `channel_id` if provided.
-- Detect newest upload using the same RSS entry strategy.
+- `youtube_channel` uses channel RSS from `channel_id` when provided.
+- `youtube` can use `yt-dlp` to inspect the latest upload and expose a media download URL.
+
+### X/Twitter and Facebook
+- For `twitter`, `x`, and `facebook`, invoke `yt-dlp --dump-single-json --flat-playlist --playlist-end 1` against `source_url`.
+- Treat the newest extracted entry id/url as `update_id` and include extractor metadata in payload.
 
 ---
 
@@ -87,3 +93,8 @@ The service entrypoint (`python -m services.source_watcher.main`) exposes:
 `POST /v1/check` returns:
 - `{"status": "no_update"}` when no new item is found
 - `{"status": "update_detected", "update": ...}` when an update is discovered and dispatched
+
+
+### Profile-building metadata
+
+For social/network channels, update payload includes normalized channel fields (`channel_name`, `channel_id`, `uploader_id`) so Profiling can build stable channel profiles across platforms.
