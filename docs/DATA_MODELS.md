@@ -1,6 +1,8 @@
 # Data Models
 
-This document is the **source of truth** for all data structures exchanged between services and stored in Elasticsearch. All services must conform to these schemas.
+The executable source of truth now lives in `contracts/src/mi_contracts/`, with generated JSON Schemas in `contracts/schemas/v1/`.
+
+This document remains the human-readable reference for those contracts and the Elasticsearch document shapes they feed.
 
 ---
 

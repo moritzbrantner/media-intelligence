@@ -9,36 +9,38 @@ This document is written for both human developers and AI agents working on this
 If you are an AI agent assigned to implement part of this system, follow this checklist before writing any code:
 
 1. **Read `docs/ARCHITECTURE.md`** — understand where your service fits in the pipeline
-2. **Read `docs/DATA_MODELS.md`** — this is the contract. Your inputs and outputs must match these schemas exactly
-3. **Read the service spec file** in `services/` that corresponds to your assignment
+2. **Read `contracts/src/mi_contracts/` and `docs/DATA_MODELS.md`** — these are the shared contracts
+3. **Read the relevant bounded-context package** under `projects/` and the matching service spec in `services/` if one exists
 4. **Read this document** (you're doing that now)
-5. **Do not modify** `docs/DATA_MODELS.md` or `docs/ARCHITECTURE.md` without explicit instruction — these are shared contracts
+5. **Do not modify** shared contracts casually — changes in `mi_contracts` must be deliberate and version-aware
 6. **Do not introduce new dependencies** without adding them to the relevant service's `requirements.txt` and noting them in the service spec
 
 ---
 
 ## Project Structure
 
-Each service lives in its own directory:
+The repository is organized by bounded context:
 
-```
-services/
-├── ingestion/
-│   ├── requirements.txt
-│   ├── main.py             ← Celery worker entrypoint
-│   ├── adapters/           ← One file per source type (youtube.py, twitter.py, ...)
-│   └── tests/
-├── transcription/
-│   ├── requirements.txt
-│   ├── main.py
-│   └── tests/
-├── ocr/
-├── enrichment/
-├── profiling/
-└── indexer/
+```text
+contracts/
+  src/mi_contracts/
+projects/
+  discovery/
+    src/mi_discovery/
+    tests/
+  extraction/
+    src/mi_extraction/
+    tests/
+  understanding/
+    src/mi_understanding/
+    tests/
+  search/
+    src/mi_search/
+    tests/
+services/                  ← temporary compatibility layer
 ```
 
-When scaffolding a new service, create this directory structure.
+New implementation code should live under `projects/*/src/` or `contracts/src/`, not under `services/`.
 
 ---
 
@@ -121,7 +123,7 @@ Every service must include:
 - An integration test that runs the full worker with a sample payload
 - Test fixtures stored in `tests/fixtures/`
 
-Run tests with: `pytest services/{service_name}/tests/`
+Run tests from the owning project root with: `python -m pytest`
 
 ---
 

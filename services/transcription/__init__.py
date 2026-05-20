@@ -1,1 +1,1 @@
-"""Transcription service package."""
+"""Compatibility package re-exporting `mi_extraction.transcription`."""

@@ -1,0 +1,360 @@
+{
+  "$defs": {
+    "AuthorV1": {
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Handle"
+        },
+        "profile_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profile Url"
+        }
+      },
+      "title": "AuthorV1",
+      "type": "object"
+    },
+    "ChannelV1": {
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "title": "ChannelV1",
+      "type": "object"
+    },
+    "OcrFrameV1": {
+      "properties": {
+        "media_id": {
+          "title": "Media Id",
+          "type": "string"
+        },
+        "frame_index": {
+          "title": "Frame Index",
+          "type": "integer"
+        },
+        "timestamp_seconds": {
+          "title": "Timestamp Seconds",
+          "type": "number"
+        },
+        "scene_change": {
+          "title": "Scene Change",
+          "type": "boolean"
+        },
+        "text_blocks": {
+          "items": {
+            "$ref": "#/$defs/TextBlockV1"
+          },
+          "title": "Text Blocks",
+          "type": "array"
+        },
+        "full_text": {
+          "title": "Full Text",
+          "type": "string"
+        },
+        "storage_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Storage Path"
+        }
+      },
+      "required": [
+        "media_id",
+        "frame_index",
+        "timestamp_seconds",
+        "scene_change",
+        "full_text"
+      ],
+      "title": "OcrFrameV1",
+      "type": "object"
+    },
+    "TextBlockV1": {
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bounding_box": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Bounding Box",
+          "type": "object"
+        }
+      },
+      "required": [
+        "text",
+        "confidence"
+      ],
+      "title": "TextBlockV1",
+      "type": "object"
+    },
+    "TranscriptSegmentV1": {
+      "properties": {
+        "media_id": {
+          "title": "Media Id",
+          "type": "string"
+        },
+        "segment_index": {
+          "title": "Segment Index",
+          "type": "integer"
+        },
+        "speaker_id": {
+          "title": "Speaker Id",
+          "type": "string"
+        },
+        "speaker_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker Name"
+        },
+        "start_seconds": {
+          "title": "Start Seconds",
+          "type": "number"
+        },
+        "end_seconds": {
+          "title": "End Seconds",
+          "type": "number"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "media_id",
+        "segment_index",
+        "speaker_id",
+        "start_seconds",
+        "end_seconds",
+        "text",
+        "language",
+        "confidence"
+      ],
+      "title": "TranscriptSegmentV1",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "media_id": {
+      "title": "Media Id",
+      "type": "string"
+    },
+    "source_type": {
+      "title": "Source Type",
+      "type": "string"
+    },
+    "source_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Url"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "author": {
+      "$ref": "#/$defs/AuthorV1"
+    },
+    "channel": {
+      "$ref": "#/$defs/ChannelV1"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Published At"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
+    "transcript_segments": {
+      "items": {
+        "$ref": "#/$defs/TranscriptSegmentV1"
+      },
+      "title": "Transcript Segments",
+      "type": "array"
+    },
+    "ocr_frames": {
+      "items": {
+        "$ref": "#/$defs/OcrFrameV1"
+      },
+      "title": "Ocr Frames",
+      "type": "array"
+    },
+    "body_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Body Text"
+    },
+    "full_text": {
+      "title": "Full Text",
+      "type": "string"
+    },
+    "source_metadata": {
+      "additionalProperties": true,
+      "title": "Source Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "media_id",
+    "source_type",
+    "full_text"
+  ],
+  "title": "ContentDocumentV1",
+  "type": "object"
+}

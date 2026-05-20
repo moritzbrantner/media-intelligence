@@ -1,0 +1,52 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.12.0}
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  search:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+    command: ["python", "-m", "mi_search.main"]
+    environment:
+      PYTHONPATH: /workspace/projects/search/src:/workspace/contracts/src
+      SEARCH_SERVICE_HOST: 0.0.0.0
+      SEARCH_SERVICE_PORT: 8088
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    ports:
+      - "${SEARCH_SERVICE_PORT:-8088}:8088"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  mock-indexer:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+    command: ["python", "-m", "ops.scripts.mock_service"]
+    environment:
+      PYTHONPATH: /workspace
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8086
+      SERVICE_NAME: mock-indexer
+      MOCK_SOURCE: indexer
+    ports:
+      - "${MOCK_INDEXER_PORT:-8086}:8086"
+
+volumes:
+  es_data:
+

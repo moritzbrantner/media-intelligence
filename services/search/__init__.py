@@ -1,1 +1,1 @@
-"""Search service package."""
+"""Compatibility package re-exporting `mi_search`."""

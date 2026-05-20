@@ -1,0 +1,51 @@
+{
+  "schema_version": "v1",
+  "media_id": "website_abc123",
+  "source_type": "website",
+  "source_url": "https://example.com/post",
+  "title": "Example Post",
+  "description": "Summary",
+  "author": {
+    "name": "Author"
+  },
+  "channel": {
+    "name": "Channel"
+  },
+  "published_at": "2026-01-01T00:00:00Z",
+  "language": "en",
+  "transcript_segments": [],
+  "ocr_frames": [],
+  "body_text": "Main cleaned text",
+  "entities": [
+    {
+      "text": "OpenAI",
+      "label": "ORG",
+      "start_char": 0,
+      "end_char": 6,
+      "source": "body"
+    }
+  ],
+  "keywords": [
+    {
+      "phrase": "example",
+      "score": 0.9,
+      "source": "body"
+    }
+  ],
+  "topics": [
+    {
+      "label": "policy",
+      "score": 0.7
+    }
+  ],
+  "sentiment": {
+    "document_level": {
+      "label": "neutral",
+      "score": 0.1
+    },
+    "per_segment": []
+  },
+  "embedding": [0.1, 0.2, 0.3],
+  "enriched_at": "2026-01-01T00:00:00Z"
+}
+

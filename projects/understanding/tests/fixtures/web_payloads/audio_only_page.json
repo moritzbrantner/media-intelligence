@@ -1,0 +1,14 @@
+{
+  "url": "https://example.com/audio",
+  "canonical_url": "https://example.com/audio",
+  "title": "Audio Page",
+  "text": "",
+  "links": [],
+  "images": [],
+  "audio": [
+    {"url": "https://cdn.example.com/track.mp3", "type": "audio/mpeg", "source": "audio_tag"}
+  ],
+  "metadata": {"lang": "en", "published_at": "2026-01-02T00:00:00Z"},
+  "fetched_at": "2026-01-02T00:00:00Z"
+}
+

@@ -1,0 +1,2 @@
+"""Operational assets package."""
+

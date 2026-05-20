@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mi-search"
+version = "0.1.0"
+description = "Search bounded context for indexing and search APIs."
+requires-python = ">=3.11"
+dependencies = [
+  "requests>=2.31,<3",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "../../contracts/src"]
+testpaths = ["tests"]
+markers = [
+  "integration: integration coverage that exercises multiple components.",
+  "elasticsearch: tests that require or emulate Elasticsearch behavior.",
+  "model: tests that exercise heavyweight model-backed paths.",
+]
+
