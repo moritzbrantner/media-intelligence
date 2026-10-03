@@ -8,7 +8,7 @@ import email.utils
 import json
 import subprocess
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import parse_qs, quote_plus, urlparse
 from xml.etree import ElementTree
 
 import requests
@@ -138,10 +138,12 @@ YT_DLP_TIMEOUT_SECONDS = 120
 
 
 class ToolFeedProvider(SourceProvider):
-    """Detect new uploads on YouTube channels/playlists via yt-dlp extractor metadata.
+    """Detect new uploads on YouTube channels via yt-dlp extractor metadata.
 
-    Only playlist-style sources are supported: yt-dlp has no timeline extractor for
-    X/Twitter accounts or Facebook pages, so those need a dedicated provider.
+    Only channel upload tabs are supported because they list the newest upload
+    first, so the first entry is the latest one. Playlists can be in any order and
+    are rejected. yt-dlp has no timeline extractor for X/Twitter accounts or
+    Facebook pages, so those need a dedicated provider.
     """
 
     SUPPORTED_TYPES = {"youtube"}
@@ -152,11 +154,10 @@ class ToolFeedProvider(SourceProvider):
     def check_for_update(
         self, subscription: SourceSubscription, state: CheckState
     ) -> tuple[dict[str, Any] | None, CheckState]:
+        _require_channel_url(subscription.source_url)
         feed = self._load_feed(subscription.source_url)
         if "entries" not in feed:
-            raise ValueError(
-                "source_url must resolve to a channel or playlist, not a single item"
-            )
+            raise ValueError("source_url must resolve to a channel, not a single item")
         entries = feed.get("entries") or []
         latest = entries[0] if entries else None
         if latest is None:
@@ -214,6 +215,14 @@ class ToolFeedProvider(SourceProvider):
             timeout=YT_DLP_TIMEOUT_SECONDS,
         )
         return json.loads(result.stdout)
+
+
+def _require_channel_url(source_url: str) -> None:
+    parsed = urlparse(source_url)
+    if parsed.path.rstrip("/").endswith("/playlist") or "list" in parse_qs(parsed.query):
+        raise ValueError(
+            "youtube source_url must be a channel URL; playlists are not ordered by upload date"
+        )
 
 
 def _extract_first_feed_item(root: ElementTree.Element) -> dict[str, Any] | None:

@@ -126,7 +126,7 @@ def test_tool_feed_provider_rejects_single_item_urls(monkeypatch) -> None:
     try:
         provider.check_for_update(subscription, CheckState())
     except ValueError as exc:
-        assert "channel or playlist" in str(exc)
+        assert "channel" in str(exc)
     else:
         raise AssertionError("expected ValueError for a single-item source_url")
 
@@ -149,3 +149,26 @@ def test_tool_feed_provider_falls_back_to_upload_date(monkeypatch) -> None:
 
     assert update is not None
     assert update["published_at"].isoformat() == "2024-02-20T00:00:00+00:00"
+
+
+def test_tool_feed_provider_rejects_playlist_urls(monkeypatch) -> None:
+    provider = ToolFeedProvider()
+    monkeypatch.setattr(
+        provider, "_load_feed", lambda url: (_ for _ in ()).throw(AssertionError("not called"))
+    )
+    for url in (
+        "https://www.youtube.com/playlist?list=PL123",
+        "https://www.youtube.com/watch?v=abc&list=PL123",
+    ):
+        subscription = SourceSubscription(
+            source_id="pl",
+            source_type="youtube",
+            source_url=url,
+            target_services=["https://consumer.local/hook"],
+        )
+        try:
+            provider.check_for_update(subscription, CheckState())
+        except ValueError as exc:
+            assert "playlists" in str(exc)
+        else:
+            raise AssertionError(f"expected ValueError for {url}")
