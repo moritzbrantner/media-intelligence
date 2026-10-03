@@ -65,7 +65,7 @@ timeline extractor for them, so they need a dedicated timeline-capable provider.
 
 ### YouTube Channel
 - `youtube_channel` uses channel RSS from `channel_id` when provided.
-- `youtube` invokes `yt-dlp --dump-single-json --flat-playlist --playlist-end 1 --extractor-args youtubetab:approximate_date` against a channel `source_url` (e.g. `https://www.youtube.com/@name/videos`), whose upload tab lists the newest upload first.
+- `youtube` invokes `yt-dlp --dump-single-json --flat-playlist --playlist-end 1 --extractor-args youtubetab:approximate_date` against the channel upload tab of `source_url` (`/videos`, `/shorts` or `/streams`), which lists the newest upload first. A root channel URL such as `https://www.youtube.com/@name` is normalized to its `/videos` tab; other tabs and non-channel URLs are rejected with HTTP 400.
 - The newest entry id is the `update_id`; the payload carries the item's `webpage_url` (flat entries are not fully extracted, so ingestion resolves the media from that page) plus extractor metadata.
 - Playlist URLs (`/playlist` or a `list=` parameter) are rejected with HTTP 400 because their order does not reflect upload date; so is a `source_url` that resolves to a single item.
 

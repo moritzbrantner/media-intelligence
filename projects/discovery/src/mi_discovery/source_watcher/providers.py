@@ -154,8 +154,7 @@ class ToolFeedProvider(SourceProvider):
     def check_for_update(
         self, subscription: SourceSubscription, state: CheckState
     ) -> tuple[dict[str, Any] | None, CheckState]:
-        _require_channel_url(subscription.source_url)
-        feed = self._load_feed(subscription.source_url)
+        feed = self._load_feed(_channel_uploads_url(subscription.source_url))
         if "entries" not in feed:
             raise ValueError("source_url must resolve to a channel, not a single item")
         entries = feed.get("entries") or []
@@ -217,12 +216,43 @@ class ToolFeedProvider(SourceProvider):
         return json.loads(result.stdout)
 
 
-def _require_channel_url(source_url: str) -> None:
+YOUTUBE_UPLOAD_TABS = {"videos", "shorts", "streams"}
+
+
+def _channel_uploads_url(source_url: str) -> str:
+    """Return the channel upload-tab URL for ``source_url`` or raise ValueError.
+
+    Only upload tabs list the newest upload first. A root channel URL is
+    normalized to its ``/videos`` tab because yt-dlp would otherwise return the
+    channel's tabs as entries instead of its videos.
+    """
     parsed = urlparse(source_url)
     if parsed.path.rstrip("/").endswith("/playlist") or "list" in parse_qs(parsed.query):
         raise ValueError(
             "youtube source_url must be a channel URL; playlists are not ordered by upload date"
         )
+
+    host = (parsed.hostname or "").lower()
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if not segments or (host != "youtube.com" and not host.endswith(".youtube.com")):
+        raise ValueError("youtube source_url must be a YouTube channel URL")
+
+    if segments[0].startswith("@"):
+        base_length = 1
+    elif segments[0] in {"channel", "c", "user"} and len(segments) >= 2:
+        base_length = 2
+    else:
+        raise ValueError("youtube source_url must be a YouTube channel URL")
+
+    tab = segments[base_length] if len(segments) > base_length else "videos"
+    if tab not in YOUTUBE_UPLOAD_TABS or len(segments) > base_length + 1:
+        raise ValueError(
+            "youtube source_url must point at a channel or one of its upload tabs "
+            "(/videos, /shorts, /streams)"
+        )
+
+    path = "/" + "/".join([*segments[:base_length], tab])
+    return f"https://{host}{path}"
 
 
 def _extract_first_feed_item(root: ElementTree.Element) -> dict[str, Any] | None:

@@ -172,3 +172,50 @@ def test_tool_feed_provider_rejects_playlist_urls(monkeypatch) -> None:
             assert "playlists" in str(exc)
         else:
             raise AssertionError(f"expected ValueError for {url}")
+
+
+def test_channel_uploads_url_normalizes_root_channels() -> None:
+    from mi_discovery.source_watcher.providers import _channel_uploads_url
+
+    assert _channel_uploads_url("https://www.youtube.com/@example") == (
+        "https://www.youtube.com/@example/videos"
+    )
+    assert _channel_uploads_url("https://www.youtube.com/channel/UC123/") == (
+        "https://www.youtube.com/channel/UC123/videos"
+    )
+    assert _channel_uploads_url("https://youtube.com/@example/streams?view=0") == (
+        "https://youtube.com/@example/streams"
+    )
+    for url in (
+        "https://www.youtube.com/@example/playlists",
+        "https://www.youtube.com/@example/featured",
+        "https://www.youtube.com/watch?v=abc",
+        "https://example.com/@example",
+    ):
+        try:
+            _channel_uploads_url(url)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"expected ValueError for {url}")
+
+
+def test_tool_feed_provider_loads_the_uploads_tab(monkeypatch) -> None:
+    provider = ToolFeedProvider()
+    requested: list[str] = []
+
+    def fake_load_feed(url: str):
+        requested.append(url)
+        return {"entries": [{"id": "v1"}]}
+
+    monkeypatch.setattr(provider, "_load_feed", fake_load_feed)
+    subscription = SourceSubscription(
+        source_id="yt",
+        source_type="youtube",
+        source_url="https://www.youtube.com/@example",
+        target_services=["https://consumer.local/hook"],
+    )
+
+    provider.check_for_update(subscription, CheckState())
+
+    assert requested == ["https://www.youtube.com/@example/videos"]
