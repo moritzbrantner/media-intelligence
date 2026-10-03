@@ -1,0 +1,29 @@
+services:
+  mock-ingestion:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+    command: ["python", "-m", "mi_discovery.ingestion.main"]
+    environment:
+      PYTHONPATH: /workspace/projects/discovery/src:/workspace/contracts/src
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8081
+      SERVICE_NAME: mock-ingestion
+      MOCK_SOURCE: ingestion
+    ports:
+      - "${MOCK_INGESTION_PORT:-8081}:8081"
+
+  source-watcher:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+    command: ["python", "-m", "mi_discovery.source_watcher.main"]
+    environment:
+      PYTHONPATH: /workspace/projects/discovery/src:/workspace/contracts/src
+      SOURCE_WATCHER_HOST: 0.0.0.0
+      SOURCE_WATCHER_PORT: 8087
+    ports:
+      - "${MOCK_SOURCE_WATCHER_PORT:-8087}:8087"
+

@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "EventMetadataV1": {
+      "properties": {
+        "schema_version": {
+          "default": "v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_type": {
+          "title": "Source Type",
+          "type": "string"
+        },
+        "retry_count": {
+          "default": 0,
+          "title": "Retry Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_type"
+      ],
+      "title": "EventMetadataV1",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "title": "Event Type",
+      "type": "string"
+    },
+    "timestamp": {
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "source_id": {
+      "title": "Source Id",
+      "type": "string"
+    },
+    "payload_location": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Payload Location"
+    },
+    "metadata": {
+      "$ref": "#/$defs/EventMetadataV1"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "source_id"
+  ],
+  "title": "EventEnvelopeV1",
+  "type": "object"
+}

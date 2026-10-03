@@ -1,0 +1,15 @@
+{
+  "url": "https://example.com/links",
+  "canonical_url": "https://example.com/links",
+  "title": "Links Only",
+  "text": "",
+  "links": [
+    {"url": "https://example.com/about", "anchor": "About", "rel": "nofollow"},
+    {"url": "https://example.com/contact", "anchor": "Contact", "rel": null}
+  ],
+  "images": [],
+  "audio": [],
+  "metadata": {"lang": "en"},
+  "fetched_at": "2026-01-01T00:00:00Z"
+}
+

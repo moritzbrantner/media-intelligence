@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+from datetime import timezone
+
+from mi_discovery.source_watcher.models import CheckState, SourceSubscription
+from mi_discovery.source_watcher.providers import RssProvider, ToolFeedProvider
+
+
+class StubResponse:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        return
+
+
+def test_rss_provider_detects_new_item(monkeypatch) -> None:
+    xml = """\
+    <rss><channel><item>
+      <guid>abc</guid>
+      <title>Hello</title>
+      <link>https://example.com/a</link>
+      <pubDate>Tue, 20 Feb 2024 10:00:00 GMT</pubDate>
+    </item></channel></rss>
+    """
+
+    def fake_get(url: str, timeout: int):
+        return StubResponse(xml)
+
+    monkeypatch.setattr("mi_discovery.source_watcher.providers.requests.get", fake_get)
+
+    provider = RssProvider()
+    subscription = SourceSubscription(
+        source_id="s1",
+        source_type="rss",
+        source_url="https://example.com/feed",
+        target_services=["https://consumer.local/hook"],
+    )
+
+    update, next_state = provider.check_for_update(subscription, CheckState())
+
+    assert update is not None
+    assert update["update_id"] == "abc"
+    assert update["published_at"].tzinfo == timezone.utc
+    assert next_state.last_update_id == "abc"
+
+
+def test_tool_feed_provider_detects_social_channel_updates(monkeypatch) -> None:
+    provider = ToolFeedProvider()
+    subscription = SourceSubscription(
+        source_id="yt-channel",
+        source_type="youtube",
+        source_url="https://www.youtube.com/@example/videos",
+        target_services=["https://consumer.local/hook"],
+    )
+
+    def fake_load_feed(source_url: str):
+        return {
+            "title": "Example Channel",
+            "entries": [
+                {
+                    "id": "video-123",
+                    "title": "Latest upload",
+                    "timestamp": 1708423200,
+                    "webpage_url": "https://youtube.com/watch?v=video-123",
+                    "url": "https://media.example/video-123.mp4",
+                    "channel": "Example Channel",
+                    "channel_id": "UC123",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(provider, "_load_feed", fake_load_feed)
+
+    update, state = provider.check_for_update(subscription, CheckState())
+    assert update is not None
+    assert update["update_id"] == "video-123"
+    assert update["payload"]["platform"] == "youtube"
+    assert update["payload"]["download_url"] == "https://media.example/video-123.mp4"
+    assert update["published_at"].tzinfo == timezone.utc
+    assert state.last_update_id == "video-123"
+
+    update_again, next_state = provider.check_for_update(subscription, state)
+    assert update_again is None
+    assert next_state.last_update_id == "video-123"
+
+
+def test_tool_feed_provider_passes_source_url_after_option_terminator(monkeypatch) -> None:
+    captured: dict = {}
+
+    class Completed:
+        stdout = '{"entries": []}'
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return Completed()
+
+    monkeypatch.setattr("mi_discovery.source_watcher.providers.subprocess.run", fake_run)
+
+    feed = ToolFeedProvider()._load_feed("--exec=touch /tmp/pwned")
+
+    assert feed == {"entries": []}
+    assert captured["args"][-2:] == ["--", "--exec=touch /tmp/pwned"]
+    assert captured["kwargs"]["timeout"] > 0

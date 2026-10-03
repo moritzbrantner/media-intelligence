@@ -12,52 +12,73 @@ A modular, microservice-based platform for ingesting, transcribing, analyzing, a
 - **Index** everything into Elasticsearch for powerful full-text and semantic search
 
 
+## Development Layout
+
+The repository is staged into bounded-context subprojects:
+
+- `contracts/` contains the versioned shared schemas in `mi_contracts`
+- `projects/discovery/` contains `mi_discovery`
+- `projects/extraction/` contains `mi_extraction`
+- `projects/understanding/` contains `mi_understanding`
+- `projects/search/` contains `mi_search`
+- `ops/` contains compose files, shared env templates, and operational scripts
+- `services/` remains as a temporary compatibility layer for legacy imports and entrypoints
+
 ## Lightweight Development Mode
 
-To keep local setup fast, `docker-compose.yml` now ships with HTTP mock services for each core worker.
-All heavyweight platform services remain in the compose file but are intentionally commented out.
+Use the split compose files under `ops/compose/` for bounded-context work:
 
-- Start all mock services with Docker: `docker compose up mock-service mock-ingestion mock-transcription mock-ocr mock-enrichment mock-profiling mock-indexer mock-source-watcher`
-- Start a single mock service bare-metal: `python services/ingestion/main.py` (swap service name as needed)
-- Base health check: `curl http://localhost:${MOCK_SERVICE_PORT:-8080}/health`
-- Service-specific mock data: `curl http://localhost:${MOCK_INGESTION_PORT:-8081}/v1/jobs?limit=5`
+- Discovery: `docker compose -f ops/compose/discovery.yml up`
+- Extraction: `docker compose -f ops/compose/extraction.yml up`
+- Understanding: `docker compose -f ops/compose/understanding.yml up`
+- Search: `docker compose -f ops/compose/search.yml up`
+- Full stack: `docker compose -f ops/compose/full-stack.yml up`
 
-If Docker is unavailable in your Codex runtime, that is an environment capability limitation (not a repo setting). In that case, use the bare-metal command above.
+Compatibility entrypoints still work from the repo root:
 
-When you want to work on a real service, create or switch to its dedicated branch and enable only that service plus dependencies in `docker-compose.yml`.
+- `python services/ingestion/main.py`
+- `python services/ocr/main.py`
+- `python services/enrichment/main.py`
+- `python -m services.source_watcher.main`
+- `python -m services.search.main`
 
 ---
 
 ## Repository Structure
 
-```
+```text
 media-intelligence/
-├── README.md                        ← You are here
+├── README.md
+├── contracts/
+│   ├── src/mi_contracts/            ← Shared versioned schemas
+│   ├── schemas/v1/                  ← Generated JSON Schemas
+│   └── tests/
 ├── docs/
-│   ├── ARCHITECTURE.md              ← System design & data flow
-│   ├── DATA_MODELS.md               ← Elasticsearch schemas & entity models
-│   ├── CONTRIBUTING.md              ← How to contribute & agent instructions
-│   ├── ROADMAP.md                   ← Phased feature roadmap
-│   └── IMPLEMENTATION_TASKS.md      ← Execution-ready engineering backlog
-├── services/
-│   ├── INGESTION.md                 ← Ingestion service spec
-│   ├── TRANSCRIPTION.md             ← Transcription & diarization service spec
-│   ├── OCR.md                       ← Frame extraction & OCR service spec
-│   ├── ENRICHMENT.md                ← NLP enrichment service spec
-│   ├── PROFILING.md                 ← Entity profiling service spec
-│   ├── INDEXER.md                   ← Elasticsearch indexing service spec
-│   ├── WEB_PARSING.md               ← Website parsing service spec (text/links/images/audio)
-│   ├── ARCHIVING.md                 ← Website archiving service spec (ArchiveBox)
-│   └── SOURCE_WATCHER.md            ← Source monitoring & update dispatch service spec
+│   ├── ARCHITECTURE.md
+│   ├── DATA_MODELS.md
+│   ├── CONTRIBUTING.md
+│   ├── ROADMAP.md
+│   ├── IMPLEMENTATION_TASKS.md
+│   └── decisions/
+├── ops/
+│   ├── compose/
+│   ├── env/
+│   └── scripts/
+├── projects/
+│   ├── discovery/
+│   ├── extraction/
+│   ├── search/
+│   └── understanding/
+├── services/                        ← Temporary compatibility layer
 └── infrastructure/
-    └── INFRASTRUCTURE.md            ← Storage, queues, deployment
+    └── INFRASTRUCTURE.md
 ```
 
 ---
 
 ## Development Utilities
 
-Install lightweight dev dependencies (including YAML parsing used by architecture/config validation checks):
+Install the shared lightweight dev dependency used by the documentation validation scripts:
 
 ```bash
 pip install -r requirements-dev.txt
@@ -74,12 +95,13 @@ If `pip install` fails with proxy/network errors (for example `403 Forbidden`), 
 - use an approved internal package mirror (`PIP_INDEX_URL`) with reachable proxy settings, or
 - run the fallback parser path via Ruby (already supported by `./scripts/validate-yaml.sh`).
 
-## Quick Start (for Agents)
+## Quick Start
 
-1. Read `docs/ARCHITECTURE.md` to understand the overall data flow
-2. Read `docs/DATA_MODELS.md` to understand the shared data contracts between services
-3. Pick a service from `services/` to implement
-4. Follow conventions in `docs/CONTRIBUTING.md`
+1. Read `docs/ARCHITECTURE.md` to understand the overall data flow.
+2. Read `contracts/src/mi_contracts/` and `docs/DATA_MODELS.md` for the shared contracts.
+3. Work inside the bounded-context project that owns the code you are changing.
+4. Run tests with `python -m pytest` from that project root.
+5. Use `services/` only for compatibility during migration.
 
 ---
 

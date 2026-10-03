@@ -1,0 +1,30 @@
+{
+  "schema_version": "v1",
+  "id": "media-123",
+  "source_type": "website",
+  "source_url": "https://example.com/post",
+  "source_id": "post-123",
+  "title": "Example Post",
+  "description": "Summary",
+  "author": {
+    "name": "Author"
+  },
+  "channel": {
+    "name": "Channel"
+  },
+  "published_at": "2026-01-01T00:00:00Z",
+  "fetched_at": "2026-01-01T00:00:00Z",
+  "duration_seconds": null,
+  "language": "en",
+  "tags": ["example"],
+  "media_files": [
+    {
+      "type": "text",
+      "storage_path": "minio://raw-media/example/post.txt",
+      "mime_type": "text/plain",
+      "size_bytes": 42
+    }
+  ],
+  "raw_metadata": {}
+}
+

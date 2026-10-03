@@ -1,0 +1,31 @@
+services:
+  mock-transcription:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+    command: ["python", "-m", "mi_extraction.transcription.mock_service"]
+    environment:
+      PYTHONPATH: /workspace/projects/extraction/src
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8082
+      SERVICE_NAME: mock-transcription
+      MOCK_SOURCE: transcription
+    ports:
+      - "${MOCK_TRANSCRIPTION_PORT:-8082}:8082"
+
+  mock-ocr:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+    command: ["python", "-m", "mi_extraction.ocr.main"]
+    environment:
+      PYTHONPATH: /workspace/projects/extraction/src
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8083
+      SERVICE_NAME: mock-ocr
+      MOCK_SOURCE: ocr
+    ports:
+      - "${MOCK_OCR_PORT:-8083}:8083"
+

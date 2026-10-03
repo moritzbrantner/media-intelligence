@@ -1,1 +1,1 @@
-"""Source watcher service package."""
+"""Compatibility package re-exporting `mi_discovery.source_watcher`."""

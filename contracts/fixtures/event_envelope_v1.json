@@ -1,0 +1,14 @@
+{
+  "schema_version": "v1",
+  "event_id": "evt-123",
+  "event_type": "content.enriched",
+  "timestamp": "2026-01-01T00:00:00Z",
+  "source_id": "website_abc123",
+  "payload_location": "minio://processed/website_abc123/enriched.json",
+  "metadata": {
+    "schema_version": "v1",
+    "source_type": "website",
+    "retry_count": 0
+  }
+}
+

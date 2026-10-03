@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mi-extraction"
+version = "0.1.0"
+description = "Extraction bounded context for transcription and OCR."
+requires-python = ">=3.11"
+dependencies = [
+  "deepmultilingualpunctuation>=1.0.1",
+  "jiwer>=3.0.4",
+  "pyannote.audio>=3.2.0",
+  "torch>=2.2,<3",
+  "transformers>=4.41,<5",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+  "integration: integration coverage that exercises multiple components.",
+  "elasticsearch: tests that require or emulate Elasticsearch behavior.",
+  "model: tests that exercise heavyweight model-backed paths.",
+]
+

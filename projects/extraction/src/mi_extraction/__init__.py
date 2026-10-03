@@ -1,0 +1,2 @@
+"""Extraction bounded context package."""
+

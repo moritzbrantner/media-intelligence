@@ -1,0 +1,25 @@
+{
+  "mappings": {
+    "properties": {
+      "media_id": { "type": "keyword" },
+      "segment_type": { "type": "keyword" },
+      "speaker_id": { "type": "keyword" },
+      "speaker_name": { "type": "keyword" },
+      "start_seconds": { "type": "float" },
+      "end_seconds": { "type": "float" },
+      "timestamp_seconds": { "type": "float" },
+      "text": { "type": "text", "analyzer": "english" },
+      "sentiment_label": { "type": "keyword" },
+      "sentiment_score": { "type": "float" },
+      "published_at": { "type": "date" },
+      "source_type": { "type": "keyword" },
+      "embedding": {
+        "type": "dense_vector",
+        "dims": 768,
+        "index": true,
+        "similarity": "cosine"
+      }
+    }
+  }
+}
+

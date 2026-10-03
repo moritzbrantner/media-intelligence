@@ -1,0 +1,31 @@
+services:
+  mock-enrichment:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+    command: ["python", "-m", "mi_understanding.enrichment.main"]
+    environment:
+      PYTHONPATH: /workspace/projects/understanding/src:/workspace/contracts/src
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8084
+      SERVICE_NAME: mock-enrichment
+      MOCK_SOURCE: enrichment
+    ports:
+      - "${MOCK_ENRICHMENT_PORT:-8084}:8084"
+
+  mock-profiling:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+    command: ["python", "-m", "mi_understanding.profiling.main"]
+    environment:
+      PYTHONPATH: /workspace/projects/understanding/src:/workspace/contracts/src
+      MOCK_SERVICE_HOST: 0.0.0.0
+      MOCK_SERVICE_PORT: 8085
+      SERVICE_NAME: mock-profiling
+      MOCK_SOURCE: profiling
+    ports:
+      - "${MOCK_PROFILING_PORT:-8085}:8085"
+

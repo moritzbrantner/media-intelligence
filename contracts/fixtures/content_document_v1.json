@@ -1,0 +1,24 @@
+{
+  "schema_version": "v1",
+  "media_id": "website_abc123",
+  "source_type": "website",
+  "source_url": "https://example.com/post",
+  "title": "Example Post",
+  "description": "Summary",
+  "author": {
+    "name": "Author"
+  },
+  "channel": {
+    "name": "Channel"
+  },
+  "published_at": "2026-01-01T00:00:00Z",
+  "language": "en",
+  "transcript_segments": [],
+  "ocr_frames": [],
+  "body_text": "Main cleaned text",
+  "full_text": "[TITLE]\nExample Post\n\n[BODY]\nMain cleaned text",
+  "source_metadata": {
+    "links": []
+  }
+}
+
