@@ -9,8 +9,9 @@ This service is designed for polling-based sources like:
 - Websites (ETag / Last-Modified)
 - Blogs and RSS/Atom feeds
 - YouTube channels (RSS or `yt-dlp` channel extraction)
-- X/Twitter accounts (via `yt-dlp`)
-- Facebook pages/profiles (via `yt-dlp`)
+
+X/Twitter accounts and Facebook pages are not supported yet: `yt-dlp` has no
+timeline extractor for them, so they need a dedicated timeline-capable provider.
 
 ---
 
@@ -64,11 +65,9 @@ This service is designed for polling-based sources like:
 
 ### YouTube Channel
 - `youtube_channel` uses channel RSS from `channel_id` when provided.
-- `youtube` can use `yt-dlp` to inspect the latest upload and expose a media download URL.
-
-### X/Twitter and Facebook
-- For `twitter`, `x`, and `facebook`, invoke `yt-dlp --dump-single-json --flat-playlist --playlist-end 1` against `source_url`.
-- Treat the newest extracted entry id/url as `update_id` and include extractor metadata in payload.
+- `youtube` invokes `yt-dlp --dump-single-json --flat-playlist --playlist-end 1 --extractor-args youtubetab:approximate_date` against a channel/playlist `source_url`.
+- The newest entry id is the `update_id`; the payload carries the item's `webpage_url` (flat entries are not fully extracted, so ingestion resolves the media from that page) plus extractor metadata.
+- A `source_url` that resolves to a single item instead of a channel/playlist is rejected with HTTP 400.
 
 ---
 
@@ -97,4 +96,4 @@ The service entrypoint (`python -m services.source_watcher.main`) exposes:
 
 ### Profile-building metadata
 
-For social/network channels, update payload includes normalized channel fields (`channel_name`, `channel_id`, `uploader_id`) so Profiling can build stable channel profiles across platforms.
+For `yt-dlp`-backed channels, the update payload includes normalized channel fields (`channel_name`, `channel_id`, `uploader_id`) so Profiling can build stable channel profiles across platforms, alongside `platform` and `raw_entry`.

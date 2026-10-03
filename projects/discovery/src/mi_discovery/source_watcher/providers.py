@@ -138,9 +138,13 @@ YT_DLP_TIMEOUT_SECONDS = 120
 
 
 class ToolFeedProvider(SourceProvider):
-    """Detect updates from social platforms via yt-dlp extractor metadata."""
+    """Detect new uploads on YouTube channels/playlists via yt-dlp extractor metadata.
 
-    SUPPORTED_TYPES = {"youtube", "twitter", "x", "facebook"}
+    Only playlist-style sources are supported: yt-dlp has no timeline extractor for
+    X/Twitter accounts or Facebook pages, so those need a dedicated provider.
+    """
+
+    SUPPORTED_TYPES = {"youtube"}
 
     def supports(self, source_type: str) -> bool:
         return source_type in self.SUPPORTED_TYPES
@@ -149,6 +153,10 @@ class ToolFeedProvider(SourceProvider):
         self, subscription: SourceSubscription, state: CheckState
     ) -> tuple[dict[str, Any] | None, CheckState]:
         feed = self._load_feed(subscription.source_url)
+        if "entries" not in feed:
+            raise ValueError(
+                "source_url must resolve to a channel or playlist, not a single item"
+            )
         entries = feed.get("entries") or []
         latest = entries[0] if entries else None
         if latest is None:
@@ -170,11 +178,13 @@ class ToolFeedProvider(SourceProvider):
             {
                 "update_id": str(update_id),
                 "title": latest.get("title") or feed.get("title"),
-                "published_at": _parse_unix_timestamp(latest.get("timestamp")),
+                "published_at": _parse_unix_timestamp(latest.get("timestamp"))
+                or _parse_upload_date(latest.get("upload_date")),
                 "payload": {
                     "tool": "yt-dlp",
-                    "download_url": latest.get("url") or latest.get("webpage_url"),
-                    "webpage_url": latest.get("webpage_url"),
+                    # Flat-playlist entries are not fully extracted, so only the item's
+                    # page URL is known; downstream ingestion resolves media from it.
+                    "webpage_url": latest.get("webpage_url") or latest.get("url"),
                     "platform": platform,
                     "channel_name": channel,
                     "channel_id": latest.get("channel_id") or feed.get("channel_id"),
@@ -193,6 +203,8 @@ class ToolFeedProvider(SourceProvider):
                 "--flat-playlist",
                 "--playlist-end",
                 "1",
+                "--extractor-args",
+                "youtubetab:approximate_date",
                 "--",
                 source_url,
             ],
@@ -272,4 +284,13 @@ def _parse_unix_timestamp(value: Any) -> datetime | None:
     try:
         return datetime.fromtimestamp(int(value), tz=timezone.utc)
     except (TypeError, ValueError, OSError):
+        return None
+
+
+def _parse_upload_date(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(str(value), "%Y%m%d").replace(tzinfo=timezone.utc)
+    except ValueError:
         return None

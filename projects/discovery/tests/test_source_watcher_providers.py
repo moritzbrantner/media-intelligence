@@ -76,7 +76,8 @@ def test_tool_feed_provider_detects_social_channel_updates(monkeypatch) -> None:
     assert update is not None
     assert update["update_id"] == "video-123"
     assert update["payload"]["platform"] == "youtube"
-    assert update["payload"]["download_url"] == "https://media.example/video-123.mp4"
+    assert update["payload"]["webpage_url"] == "https://youtube.com/watch?v=video-123"
+    assert "download_url" not in update["payload"]
     assert update["published_at"].tzinfo == timezone.utc
     assert state.last_update_id == "video-123"
 
@@ -103,3 +104,48 @@ def test_tool_feed_provider_passes_source_url_after_option_terminator(monkeypatc
     assert feed == {"entries": []}
     assert captured["args"][-2:] == ["--", "--exec=touch /tmp/pwned"]
     assert captured["kwargs"]["timeout"] > 0
+
+
+def test_tool_feed_provider_only_handles_youtube() -> None:
+    provider = ToolFeedProvider()
+    assert provider.supports("youtube")
+    for source_type in ("twitter", "x", "facebook", "youtube_channel"):
+        assert not provider.supports(source_type)
+
+
+def test_tool_feed_provider_rejects_single_item_urls(monkeypatch) -> None:
+    provider = ToolFeedProvider()
+    subscription = SourceSubscription(
+        source_id="single",
+        source_type="youtube",
+        source_url="https://www.youtube.com/watch?v=video-123",
+        target_services=["https://consumer.local/hook"],
+    )
+    monkeypatch.setattr(provider, "_load_feed", lambda url: {"id": "video-123"})
+
+    try:
+        provider.check_for_update(subscription, CheckState())
+    except ValueError as exc:
+        assert "channel or playlist" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for a single-item source_url")
+
+
+def test_tool_feed_provider_falls_back_to_upload_date(monkeypatch) -> None:
+    provider = ToolFeedProvider()
+    subscription = SourceSubscription(
+        source_id="yt",
+        source_type="youtube",
+        source_url="https://www.youtube.com/@example/videos",
+        target_services=["https://consumer.local/hook"],
+    )
+    monkeypatch.setattr(
+        provider,
+        "_load_feed",
+        lambda url: {"entries": [{"id": "v1", "upload_date": "20240220"}]},
+    )
+
+    update, _ = provider.check_for_update(subscription, CheckState())
+
+    assert update is not None
+    assert update["published_at"].isoformat() == "2024-02-20T00:00:00+00:00"
