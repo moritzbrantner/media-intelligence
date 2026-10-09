@@ -12,7 +12,7 @@ dependencies = [
   "jiwer>=3.0.4",
   "pyannote.audio>=3.2.0",
   "torch>=2.2,<3",
-  "transformers>=4.41,<5",
+  "transformers>=5.19,<6",
 ]
 
 [tool.setuptools]
