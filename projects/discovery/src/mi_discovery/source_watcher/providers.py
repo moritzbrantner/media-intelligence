@@ -16,6 +16,13 @@ import requests
 from .models import CheckState, SourceSubscription
 
 
+class SourceCheckError(Exception):
+    """A source could not be checked right now (tool missing, failed or timed out).
+
+    Unlike ``ValueError`` (a bad subscription), this is a transient upstream failure.
+    """
+
+
 class SourceProvider(ABC):
     """Interface for checking one source type for updates."""
 
@@ -196,6 +203,21 @@ class ToolFeedProvider(SourceProvider):
         )
 
     def _load_feed(self, source_url: str) -> dict[str, Any]:
+        try:
+            return self._run_yt_dlp(source_url)
+        except FileNotFoundError as exc:
+            raise SourceCheckError("yt-dlp is not installed") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise SourceCheckError(
+                f"yt-dlp did not finish within {YT_DLP_TIMEOUT_SECONDS} seconds"
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or "").strip().splitlines()[-1:] or [f"exit status {exc.returncode}"]
+            raise SourceCheckError(f"yt-dlp failed: {detail[0]}") from exc
+        except json.JSONDecodeError as exc:
+            raise SourceCheckError("yt-dlp returned invalid JSON") from exc
+
+    def _run_yt_dlp(self, source_url: str) -> dict[str, Any]:
         result = subprocess.run(
             [
                 "yt-dlp",
@@ -216,7 +238,9 @@ class ToolFeedProvider(SourceProvider):
         return json.loads(result.stdout)
 
 
-YOUTUBE_UPLOAD_TABS = {"videos", "shorts", "streams"}
+# `/streams` is excluded: a scheduled future broadcast can stay first in that tab, so its
+# first entry is not the newest completed stream and intervening streams would be missed.
+YOUTUBE_UPLOAD_TABS = {"videos", "shorts"}
 
 
 def _channel_uploads_url(source_url: str) -> str:
@@ -247,8 +271,9 @@ def _channel_uploads_url(source_url: str) -> str:
     tab = segments[base_length] if len(segments) > base_length else "videos"
     if tab not in YOUTUBE_UPLOAD_TABS or len(segments) > base_length + 1:
         raise ValueError(
-            "youtube source_url must point at a channel or one of its upload tabs "
-            "(/videos, /shorts, /streams)"
+            "youtube source_url must point at a channel or one of its newest-first upload tabs "
+            "(/videos, /shorts); /streams is not supported because scheduled broadcasts "
+            "can stay first"
         )
 
     path = "/" + "/".join([*segments[:base_length], tab])

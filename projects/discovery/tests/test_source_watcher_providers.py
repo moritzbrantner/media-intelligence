@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timezone
+import json
 
 from mi_discovery.source_watcher.models import CheckState, SourceSubscription
 from mi_discovery.source_watcher.providers import RssProvider, ToolFeedProvider
@@ -183,10 +184,11 @@ def test_channel_uploads_url_normalizes_root_channels() -> None:
     assert _channel_uploads_url("https://www.youtube.com/channel/UC123/") == (
         "https://www.youtube.com/channel/UC123/videos"
     )
-    assert _channel_uploads_url("https://youtube.com/@example/streams?view=0") == (
-        "https://youtube.com/@example/streams"
+    assert _channel_uploads_url("https://youtube.com/@example/shorts?view=0") == (
+        "https://youtube.com/@example/shorts"
     )
     for url in (
+        "https://www.youtube.com/@example/streams",
         "https://www.youtube.com/@example/playlists",
         "https://www.youtube.com/@example/featured",
         "https://www.youtube.com/watch?v=abc",
@@ -219,3 +221,28 @@ def test_tool_feed_provider_loads_the_uploads_tab(monkeypatch) -> None:
     provider.check_for_update(subscription, CheckState())
 
     assert requested == ["https://www.youtube.com/@example/videos"]
+
+
+def test_tool_feed_provider_reports_yt_dlp_failures_as_source_check_errors(monkeypatch) -> None:
+    import subprocess
+
+    from mi_discovery.source_watcher.providers import SourceCheckError
+
+    provider = ToolFeedProvider()
+    failures = [
+        FileNotFoundError("yt-dlp"),
+        subprocess.TimeoutExpired(["yt-dlp"], 120),
+        subprocess.CalledProcessError(1, ["yt-dlp"], stderr="ERROR: unavailable\n"),
+        json.JSONDecodeError("bad", "", 0),
+    ]
+    for failure in failures:
+        def fail(url: str, failure=failure):
+            raise failure
+
+        monkeypatch.setattr(provider, "_run_yt_dlp", fail)
+        try:
+            provider._load_feed("https://www.youtube.com/@example/videos")
+        except SourceCheckError:
+            pass
+        else:
+            raise AssertionError(f"expected SourceCheckError for {failure!r}")

@@ -9,7 +9,13 @@ import json
 import os
 
 from .notifier import WebhookNotifier
-from .providers import RssProvider, ToolFeedProvider, WebsiteProvider, YouTubeProvider
+from .providers import (
+    RssProvider,
+    SourceCheckError,
+    ToolFeedProvider,
+    WebsiteProvider,
+    YouTubeProvider,
+)
 from .service import SourceWatcherService, parse_subscription, serialize_update
 
 HOST = os.getenv("SOURCE_WATCHER_HOST", "0.0.0.0")
@@ -55,6 +61,12 @@ class Handler(BaseHTTPRequestHandler):
             update = SERVICE.check_subscription(subscription)
         except ValueError as exc:
             self._write_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        except SourceCheckError as exc:
+            self._write_json(
+                {"error": "source_check_failed", "detail": str(exc)},
+                status=HTTPStatus.BAD_GATEWAY,
+            )
             return
 
         if update is None:
