@@ -9,6 +9,7 @@ description = "Discovery bounded context for ingestion and source monitoring."
 requires-python = ">=3.11"
 dependencies = [
   "requests>=2.31,<3",
+  "yt-dlp>=2024.8.6",
 ]
 
 [tool.setuptools]

@@ -8,7 +8,10 @@ This service is designed for polling-based sources like:
 
 - Websites (ETag / Last-Modified)
 - Blogs and RSS/Atom feeds
-- YouTube channels (via channel RSS)
+- YouTube channels (RSS or `yt-dlp` channel extraction)
+
+X/Twitter accounts and Facebook pages are not supported yet: `yt-dlp` has no
+timeline extractor for them, so they need a dedicated timeline-capable provider.
 
 ---
 
@@ -61,8 +64,11 @@ This service is designed for polling-based sources like:
 - Track the latest `guid`/`id` to detect new content.
 
 ### YouTube Channel
-- Resolve channel RSS feed from `channel_id` if provided.
-- Detect newest upload using the same RSS entry strategy.
+- `youtube_channel` uses channel RSS from `channel_id` when provided.
+- `youtube` invokes `yt-dlp --dump-single-json --flat-playlist --playlist-end 1 --extractor-args youtubetab:approximate_date` against the channel upload tab of `source_url` (`/videos` or `/shorts`), which lists the newest upload first. `/streams` is rejected because a scheduled future broadcast can stay first there. A root channel URL such as `https://www.youtube.com/@name` is normalized to its `/videos` tab; other tabs and non-channel URLs are rejected with HTTP 400.
+- The newest entry id is the `update_id`; the payload carries the item's `webpage_url` (flat entries are not fully extracted, so ingestion resolves the media from that page) plus extractor metadata.
+- Playlist URLs (`/playlist` or a `list=` parameter) are rejected with HTTP 400 because their order does not reflect upload date; so is a `source_url` that resolves to a single item.
+- If yt-dlp is missing, exits non-zero, times out or prints invalid JSON, `/v1/check` answers HTTP 502 with `{"error": "source_check_failed", "detail": ...}`: a transient check failure, distinct from a rejected subscription (400).
 
 ---
 
@@ -87,3 +93,8 @@ The service entrypoint (`python -m services.source_watcher.main`) exposes:
 `POST /v1/check` returns:
 - `{"status": "no_update"}` when no new item is found
 - `{"status": "update_detected", "update": ...}` when an update is discovered and dispatched
+
+
+### Profile-building metadata
+
+For `yt-dlp`-backed channels, the update payload includes normalized channel fields (`channel_name`, `channel_id`, `uploader_id`) so Profiling can build stable channel profiles across platforms, alongside `platform` and `raw_entry`.

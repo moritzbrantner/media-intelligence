@@ -5,13 +5,22 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 import email.utils
+import json
+import subprocess
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import parse_qs, quote_plus, urlparse
 from xml.etree import ElementTree
 
 import requests
 
 from .models import CheckState, SourceSubscription
+
+
+class SourceCheckError(Exception):
+    """A source could not be checked right now (tool missing, failed or timed out).
+
+    Unlike ``ValueError`` (a bad subscription), this is a transient upstream failure.
+    """
 
 
 class SourceProvider(ABC):
@@ -132,6 +141,145 @@ class YouTubeProvider(RssProvider):
         return super().check_for_update(yt_subscription, state)
 
 
+YT_DLP_TIMEOUT_SECONDS = 120
+
+
+class ToolFeedProvider(SourceProvider):
+    """Detect new uploads on YouTube channels via yt-dlp extractor metadata.
+
+    Only channel upload tabs are supported because they list the newest upload
+    first, so the first entry is the latest one. Playlists can be in any order and
+    are rejected. yt-dlp has no timeline extractor for X/Twitter accounts or
+    Facebook pages, so those need a dedicated provider.
+    """
+
+    SUPPORTED_TYPES = {"youtube"}
+
+    def supports(self, source_type: str) -> bool:
+        return source_type in self.SUPPORTED_TYPES
+
+    def check_for_update(
+        self, subscription: SourceSubscription, state: CheckState
+    ) -> tuple[dict[str, Any] | None, CheckState]:
+        feed = self._load_feed(_channel_uploads_url(subscription.source_url))
+        if "entries" not in feed:
+            raise ValueError("source_url must resolve to a channel, not a single item")
+        entries = feed.get("entries") or []
+        latest = entries[0] if entries else None
+        if latest is None:
+            return None, state
+
+        update_id = latest.get("id") or latest.get("url") or latest.get("webpage_url")
+        if not update_id:
+            return None, state
+
+        next_state = CheckState(last_update_id=str(update_id))
+        if next_state.last_update_id == state.last_update_id:
+            return None, next_state
+
+        channel = latest.get("channel") or feed.get("channel") or feed.get("uploader")
+        uploader_id = latest.get("uploader_id") or feed.get("uploader_id")
+        platform = subscription.source_type
+
+        return (
+            {
+                "update_id": str(update_id),
+                "title": latest.get("title") or feed.get("title"),
+                "published_at": _parse_unix_timestamp(latest.get("timestamp"))
+                or _parse_upload_date(latest.get("upload_date")),
+                "payload": {
+                    "tool": "yt-dlp",
+                    # Flat-playlist entries are not fully extracted, so only the item's
+                    # page URL is known; downstream ingestion resolves media from it.
+                    "webpage_url": latest.get("webpage_url") or latest.get("url"),
+                    "platform": platform,
+                    "channel_name": channel,
+                    "channel_id": latest.get("channel_id") or feed.get("channel_id"),
+                    "uploader_id": uploader_id,
+                    "raw_entry": latest,
+                },
+            },
+            next_state,
+        )
+
+    def _load_feed(self, source_url: str) -> dict[str, Any]:
+        try:
+            return self._run_yt_dlp(source_url)
+        except FileNotFoundError as exc:
+            raise SourceCheckError("yt-dlp is not installed") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise SourceCheckError(
+                f"yt-dlp did not finish within {YT_DLP_TIMEOUT_SECONDS} seconds"
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or "").strip().splitlines()[-1:] or [f"exit status {exc.returncode}"]
+            raise SourceCheckError(f"yt-dlp failed: {detail[0]}") from exc
+        except json.JSONDecodeError as exc:
+            raise SourceCheckError("yt-dlp returned invalid JSON") from exc
+
+    def _run_yt_dlp(self, source_url: str) -> dict[str, Any]:
+        result = subprocess.run(
+            [
+                "yt-dlp",
+                "--dump-single-json",
+                "--flat-playlist",
+                "--playlist-end",
+                "1",
+                "--extractor-args",
+                "youtubetab:approximate_date",
+                "--",
+                source_url,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=YT_DLP_TIMEOUT_SECONDS,
+        )
+        return json.loads(result.stdout)
+
+
+# `/streams` is excluded: a scheduled future broadcast can stay first in that tab, so its
+# first entry is not the newest completed stream and intervening streams would be missed.
+YOUTUBE_UPLOAD_TABS = {"videos", "shorts"}
+
+
+def _channel_uploads_url(source_url: str) -> str:
+    """Return the channel upload-tab URL for ``source_url`` or raise ValueError.
+
+    Only upload tabs list the newest upload first. A root channel URL is
+    normalized to its ``/videos`` tab because yt-dlp would otherwise return the
+    channel's tabs as entries instead of its videos.
+    """
+    parsed = urlparse(source_url)
+    if parsed.path.rstrip("/").endswith("/playlist") or "list" in parse_qs(parsed.query):
+        raise ValueError(
+            "youtube source_url must be a channel URL; playlists are not ordered by upload date"
+        )
+
+    host = (parsed.hostname or "").lower()
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if not segments or (host != "youtube.com" and not host.endswith(".youtube.com")):
+        raise ValueError("youtube source_url must be a YouTube channel URL")
+
+    if segments[0].startswith("@"):
+        base_length = 1
+    elif segments[0] in {"channel", "c", "user"} and len(segments) >= 2:
+        base_length = 2
+    else:
+        raise ValueError("youtube source_url must be a YouTube channel URL")
+
+    tab = segments[base_length] if len(segments) > base_length else "videos"
+    if tab not in YOUTUBE_UPLOAD_TABS or len(segments) > base_length + 1:
+        raise ValueError(
+            "youtube source_url must point at a channel or one of its newest-first upload tabs "
+            "(/videos, /shorts); /streams is not supported because scheduled broadcasts "
+            "can stay first"
+        )
+
+    path = "/" + "/".join([*segments[:base_length], tab])
+    return f"https://{host}{path}"
+
+
 def _extract_first_feed_item(root: ElementTree.Element) -> dict[str, Any] | None:
     namespaces = {
         "atom": "http://www.w3.org/2005/Atom",
@@ -193,3 +341,20 @@ def _parse_http_date(value: str | None) -> datetime | None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
 
+
+def _parse_unix_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _parse_upload_date(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(str(value), "%Y%m%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
