@@ -449,14 +449,16 @@ fn validate_run<R: Clone>(
 /// or cached) with an observation outside every scene interval.
 fn observation_outside_scenes(run: &VisibleTextRun, scenes: &SceneRun) -> Option<String> {
     run.observations.iter().find_map(|observation| {
+        // Composition places evidence by time, so the timestamp must lie in the half-open
+        // scene interval; a frame index, when both sides have one, must agree.
         let inside = scenes.scenes.iter().any(|scene| {
-            match (observation.frame_index, scene.start_frame, scene.end_frame) {
+            let in_time = scene.start_seconds <= observation.timestamp_seconds
+                && observation.timestamp_seconds < scene.end_seconds;
+            let in_frames = match (observation.frame_index, scene.start_frame, scene.end_frame) {
                 (Some(frame), Some(start), Some(end)) => start <= frame && frame < end,
-                _ => {
-                    scene.start_seconds <= observation.timestamp_seconds
-                        && observation.timestamp_seconds <= scene.end_seconds
-                }
-            }
+                _ => true,
+            };
+            in_time && in_frames
         });
         (!inside).then(|| {
             format!(
@@ -595,4 +597,67 @@ fn detect_scenes(
         },
         scenes,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use media_intelligence_core::OcrObservation;
+
+    fn receipt(modality: Modality) -> ProducerReceipt {
+        ProducerReceipt {
+            modality,
+            producer: "p".to_string(),
+            producer_version: "1".to_string(),
+            model: "m".to_string(),
+            model_version: "1".to_string(),
+            config_hash: "c".to_string(),
+            input_hash: "i".to_string(),
+            run_id: None,
+            config: None,
+        }
+    }
+
+    fn check(frame: Option<u64>, seconds: f64) -> Option<String> {
+        let scenes = SceneRun {
+            receipt: receipt(Modality::Scene),
+            scenes: vec![SceneInterval {
+                id: "s0".to_string(),
+                index: 0,
+                start_seconds: 0.0,
+                end_seconds: 4.0,
+                start_frame: Some(0),
+                end_frame: Some(100),
+            }],
+        };
+        let run = VisibleTextRun {
+            receipt: receipt(Modality::VisibleText),
+            observations: vec![OcrObservation {
+                id: "o".to_string(),
+                text: "t".to_string(),
+                timestamp_seconds: seconds,
+                frame_index: frame,
+                language: None,
+                region: None,
+                confidence: None,
+            }],
+            tracks: vec![],
+        };
+        observation_outside_scenes(&run, &scenes)
+    }
+
+    #[test]
+    fn scene_membership_needs_time_and_frame_inside_the_half_open_interval() {
+        assert!(check(Some(50), 2.0).is_none());
+        assert!(check(None, 2.0).is_none());
+        assert!(
+            check(Some(50), 9.0).is_some(),
+            "stale timestamp with an in-range frame"
+        );
+        assert!(check(Some(150), 2.0).is_some(), "frame outside");
+        assert!(
+            check(None, 4.0).is_some(),
+            "exactly at the scene end is outside"
+        );
+    }
 }
