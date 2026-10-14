@@ -1,5 +1,7 @@
 # Architecture
 
+> **Target architecture approved 2026-10-14:** see the [README's target direction](../README.md#approved-target-direction-2026-10-14-migration-not-yet-implemented). The Python queue/microservice pipeline documented below is an existing legacy design to be progressively replaced with an embeddable Rust multimodal composition library and corpus-owned indexes. Do not treat the following diagrams as a new implementation mandate.
+
 ## Overview
 
 The platform is built as a pipeline of loosely coupled microservices. Each service reads from a queue, does one job well, and either writes results to object storage or publishes to the next queue stage.

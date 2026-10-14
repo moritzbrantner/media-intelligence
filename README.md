@@ -1,5 +1,22 @@
 # Media Intelligence Platform
 
+## Approved target direction (2026-10-14; migration not yet implemented)
+
+Media Intelligence is to become an **embeddable Rust multimodal analysis and retrieval-composition library** shared by corpus applications. This replaces the legacy premise that the repository's primary product is a Python microservice pipeline.
+
+- **Producer ownership stays below this project.** Invoke existing audio/transcription, visual/OCR, scene-detection and NLP libraries. Media Intelligence owns reusable planning/composition of those capabilities, evidence alignment across modalities, and cross-modal retrieval/result assembly; it does not recreate their algorithms, model runtimes or generic text-ranking/indexing implementations.
+- **Option A: corpus-owned indexes first.** The consuming corpus owns its source identity, metadata, original and derived persistence, index lifecycle, query UX and access policy. Media Intelligence provides typed reusable analysis/result contracts and corpus-neutral cross-modal fusion against caller-supplied evidence/index adapters. No mandatory central index, copied corpus, or Elasticsearch/Qdrant service.
+- **Consumer boundaries.** YouTube Corpus owns YouTube discovery, channel/playlist monitoring, downloads and metadata; Document Search owns local document ingestion, source paths, offline/browser persistence and UX; Media Similarity owns local-folder/S3 source configuration, quality evaluation, its Qdrant and Pages index variants, similarity-product behavior and UI. These products may adopt common Media Intelligence analysis/composition without losing their existing standalone modes.
+- **Evidence correctness.** Preserve source/revision identity, modality, timestamp or page/span locators, detector/model/configuration provenance, unknown/unprocessed status and independent score semantics. Multimodal alignment is not person-belief attribution or verification of a proposition's truth; downstream interpretation remains with its owning products.
+- **Migration approach.** Extract/adapt demonstrated common behavior from existing Rust consumers with compatibility and independent acceptance before removing old implementations. Keep existing consumer behavior working; do not start a flag-day rewrite. Rust is the target implementation language, with optional transport/bindings only when real consumers require them; no obligatory Python/Redis/MinIO/Elasticsearch runtime for the core.
+
+**Not decided:** whether generic search should eventually be a separately owned repository, another package or an optional operation mode. Do not create a new search repository or duplicate `nlp-stack` retrieval semantics on the strength of that suggestion alone. A federated/global index is also not part of the initial approved scope.
+
+**Status:** the Python services, contracts and operational instructions below describe existing/legacy implementation surfaces, not proof that this target architecture is implemented. The recorded bounded-context split in [ADR 0001](docs/decisions/0001-bounded-context-monorepo.md) remains historical context for those services; its Python/microservice structure is not the new design authority. Implementation work and acceptance are tracked in GitHub issues.
+
+---
+
+
 A modular, microservice-based platform for ingesting, transcribing, analyzing, and indexing media from multiple sources — YouTube, X/Twitter, Substack, PDFs, plain text, and more — with the goal of building rich, searchable profiles of people, organizations, and channels.
 
 ## What It Does
