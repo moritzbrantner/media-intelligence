@@ -1,0 +1,22 @@
+[package]
+name = "media-intelligence-analysis"
+description = "Bounded native media-analysis operation: runs the canonical scene producer and caller-supplied speech/visible-text producers for one caller-owned media file and composes their evidence through media-intelligence-core."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "media_intelligence_analysis"
+
+[dependencies]
+media-intelligence-core = { path = "../media-intelligence-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+video-analysis-ffmpeg.workspace = true
+video-analysis-ingest.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -21,6 +21,10 @@ cargo test --locked -p media-intelligence-core
 cargo run --locked -p media-intelligence-core --example compose -- crates/media-intelligence-core/tests/fixtures/lecture_composition.json
 ```
 
+### Producer execution: `crates/media-intelligence-analysis`
+
+`analyze` runs one caller-owned local media file through a selected profile: scene detection executes for real through the canonical `visual-analysis` path (`FfmpegVideoSource` + `detect_content_scenes`, exact-rev pinned; needs `ffmpeg`/`ffprobe` on `PATH`), while speech and visible text are typed producer seams the caller fills (a requested modality without a producer is reported **unavailable**). The content hash is verified before any stage, results are reused through a caller-owned stage cache keyed by content hash + producer identity + configuration, cancellation stops new stages, and a failed stage never discards the others. ASR and OCR producer adapters and model-backed acceptance are tracked separately (see #27).
+
 Running real producers on a video is [#27](https://github.com/moritzbrantner/media-intelligence/issues/27); retrieval fusion over corpus-owned indexes is [#26](https://github.com/moritzbrantner/media-intelligence/issues/26). The Python transcription, OCR, enrichment and search services stay as compatibility-only legacy surfaces; they are retired under [#16](https://github.com/moritzbrantner/media-intelligence/issues/16) only after YouTube Corpus, Document Search and Media Similarity each pass independent acceptance on the Rust core.
 
 **Status:** the Python services, contracts and operational instructions below describe existing/legacy implementation surfaces, not proof that this target architecture is implemented. The recorded bounded-context split in [ADR 0001](docs/decisions/0001-bounded-context-monorepo.md) remains historical context for those services; its Python/microservice structure is not the new design authority. Implementation work and acceptance are tracked in GitHub issues.
