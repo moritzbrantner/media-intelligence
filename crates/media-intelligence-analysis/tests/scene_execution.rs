@@ -16,7 +16,7 @@ fn scene_receipt_constants_name_the_pinned_canonical_producer() {
     assert_eq!(SCENE_PRODUCER, "visual-analysis");
     assert_eq!(
         VISUAL_ANALYSIS_REVISION,
-        "115c1f0caceb644993df3121b4625e674a9f1b7a"
+        "f73969447916e5ac47f4559fc51ab47552f4f734"
     );
     assert_eq!(SCENE_MODEL, "scenedetect-core:content");
     assert_eq!(SCENE_MODEL_VERSION, "0.1.0");
@@ -87,7 +87,7 @@ fn real_scene_run_yields_exact_boundaries_receipt_and_core_composition() {
     assert_eq!(receipt.producer, "visual-analysis");
     assert_eq!(
         receipt.producer_version,
-        "115c1f0caceb644993df3121b4625e674a9f1b7a"
+        "f73969447916e5ac47f4559fc51ab47552f4f734"
     );
     assert_eq!(receipt.model, "scenedetect-core:content");
     assert_eq!(receipt.model_version, "0.1.0");

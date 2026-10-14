@@ -72,6 +72,12 @@ jobs:
           cargo clippy --locked -p media-intelligence-analysis --all-targets --features audio-analysis -- -D warnings
           cargo test --locked -p media-intelligence-analysis --features audio-analysis
 
+      - name: Lint and test the visual-analysis OCR adapter feature
+        shell: bash
+        run: |
+          cargo clippy --locked -p media-intelligence-analysis --all-targets --features visual-analysis-ocr -- -D warnings
+          cargo test --locked -p media-intelligence-analysis --features visual-analysis-ocr 2>&1 | tee -a test.log
+
       - name: Require real scene-producer execution
         run: "! grep -q SKIPPED test.log"
 

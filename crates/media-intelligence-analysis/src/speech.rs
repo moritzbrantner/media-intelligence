@@ -47,7 +47,6 @@
 
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 /// The pinned audio-analysis transcription crate, so callers build provider options with
@@ -71,16 +70,9 @@ pub const SPEECH_PRODUCER_PREFIX: &str = "audio-analysis";
 /// Receipt `model_version` when the caller declares no model version.
 pub const UNSPECIFIED_MODEL_VERSION: &str = "unspecified";
 
-/// Whether `audio-analysis` may fetch models over the network.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ModelFetchPolicy {
-    /// Local models only (the default). Download-capable configurations are refused.
-    #[default]
-    LocalOnly,
-    /// The caller explicitly allows first-run model downloads and network access.
-    AllowNetwork,
-}
+/// Whether `audio-analysis` may fetch models over the network (shared with the #33
+/// visible-text adapter; defined at the crate root).
+pub use crate::ModelFetchPolicy;
 
 /// The caller's transcription configuration for one [`AudioAnalysisSpeechProducer`].
 #[derive(Debug, Clone, PartialEq)]

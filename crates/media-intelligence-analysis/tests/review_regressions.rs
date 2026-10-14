@@ -303,3 +303,123 @@ fn wrong_modality_receipt_fails_only_its_stage() {
         StageStatus::CompletedWithFindings { .. }
     ));
 }
+
+#[test]
+fn scene_bound_identity_changes_when_only_the_intervals_change() {
+    use media_intelligence_analysis::{scene_bound_identity, SceneRun};
+    use media_intelligence_core::SceneInterval;
+
+    let interval = |end: f64| SceneInterval {
+        id: "scene-0".to_string(),
+        index: 0,
+        start_seconds: 0.0,
+        end_seconds: end,
+        start_frame: Some(0),
+        end_frame: Some((end * 25.0) as u64),
+    };
+    let run = |end: f64| SceneRun {
+        receipt: receipt(Modality::Scene, &identity("scenes"), "sha256:x"),
+        scenes: vec![interval(end)],
+    };
+    let own = identity("ocr");
+    assert_eq!(
+        scene_bound_identity(&own, &run(5.0)),
+        scene_bound_identity(&own, &run(5.0))
+    );
+    assert_ne!(
+        scene_bound_identity(&own, &run(5.0)).config_hash,
+        scene_bound_identity(&own, &run(6.0)).config_hash
+    );
+}
+
+#[test]
+fn scene_dependent_run_with_observations_outside_the_scenes_is_rejected() {
+    use media_intelligence_analysis::{scene_bound_identity, SceneConfig, SceneRun};
+    use std::cell::RefCell;
+
+    struct OutsideOcr {
+        received: RefCell<Option<SceneRun>>,
+    }
+    impl VisibleTextProducer for OutsideOcr {
+        fn identity(&self) -> ProducerIdentity {
+            identity("outside-ocr")
+        }
+        fn requires_scenes(&self) -> bool {
+            true
+        }
+        fn run(&self, input: &ProducerInput<'_>) -> Result<VisibleTextRun, ProducerError> {
+            let scenes = input.scenes.expect("scene run handed over");
+            *self.received.borrow_mut() = Some(scenes.clone());
+            let bound = scene_bound_identity(&self.identity(), scenes);
+            let mut run = ocr_run(input.input_hash);
+            run.receipt = receipt(Modality::VisibleText, &bound, input.input_hash);
+            // Far beyond the end of any scene of the clip.
+            run.observations[0].timestamp_seconds = 10_000.0;
+            Ok(run)
+        }
+    }
+
+    let Some(clip) = ffmpeg_clip() else { return };
+    let ocr = OutsideOcr {
+        received: RefCell::new(None),
+    };
+    let report = analyze(
+        &AnalysisRequest {
+            media: MediaIdentity {
+                asset_id: AssetId::new("asset").unwrap(),
+                content_hash: ContentHash::from_bytes(fs::read(&clip.1).unwrap()),
+                duration_seconds: None,
+            },
+            media_path: clip.1.clone(),
+            profile: AnalysisProfile {
+                speech: false,
+                visible_text: true,
+                scenes: Some(SceneConfig::default()),
+            },
+        },
+        &Producers {
+            speech: None,
+            visible_text: Some(&ocr),
+        },
+        &mut InMemoryStageCache::new(),
+        &CancellationToken::new(),
+    )
+    .unwrap();
+    assert!(ocr.received.borrow().is_some());
+    assert!(
+        matches!(report.visible_text, StageStatus::Failed { .. }),
+        "{:?}",
+        report.visible_text
+    );
+}
+
+/// A two-colour clip (scene detection needs a real video); `None` without ffmpeg.
+fn ffmpeg_clip() -> Option<(tempfile::TempDir, std::path::PathBuf)> {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("clip.mp4");
+    let status = std::process::Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=160x120:r=25:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=blue:s=160x120:r=25:d=2",
+            "-filter_complex",
+            "[0:v][1:v]concat=n=2:v=1:a=0[v]",
+            "-map",
+            "[v]",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .arg(&path)
+        .status()
+        .ok()?;
+    status.success().then_some((dir, path))
+}

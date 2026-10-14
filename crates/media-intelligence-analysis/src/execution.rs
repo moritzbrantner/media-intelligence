@@ -14,9 +14,9 @@ use sha2::{Digest, Sha256};
 use video_analysis_ffmpeg::FfmpegVideoSource;
 
 use crate::{
-    input_hash, AnalysisError, AnalysisReport, AnalysisRequest, CachedStage, CancellationToken,
-    ContentHash, MediaIdentity, Modality, ProducerError, ProducerIdentity, ProducerInput,
-    ProducerReceipt, Producers, SceneConfig, StageCache, StageKey, StageStatus,
+    input_hash, scene_bound_identity, AnalysisError, AnalysisReport, AnalysisRequest, CachedStage,
+    CancellationToken, ContentHash, MediaIdentity, Modality, ProducerError, ProducerIdentity,
+    ProducerInput, ProducerReceipt, Producers, SceneConfig, StageCache, StageKey, StageStatus,
     VISUAL_ANALYSIS_REVISION,
 };
 
@@ -198,23 +198,8 @@ pub(crate) fn analyze(
                 CachedStage::Speech(run) => Some(run),
                 _ => None,
             },
-            |input| producer.run(input),
-        ),
-    };
-    let visible_text = match (request.profile.visible_text, producers.visible_text) {
-        (false, _) => Stage::NotRequested,
-        (true, None) => stage_without_producer(cancellation),
-        (true, Some(producer)) => run_stage(
-            &context,
-            cache,
-            Modality::VisibleText,
-            producer.identity(),
-            |run: &VisibleTextRun| &run.receipt,
-            CachedStage::VisibleText,
-            |cached| match cached {
-                CachedStage::VisibleText(run) => Some(run),
-                _ => None,
-            },
+            None,
+            None,
             |input| producer.run(input),
         ),
     };
@@ -231,10 +216,60 @@ pub(crate) fn analyze(
                 CachedStage::Scenes(run) => Some(run),
                 _ => None,
             },
+            None,
+            None,
             |input| detect_scenes(input, config),
         ),
     };
 
+    // Visible text runs after scenes so that a scene-dependent producer (#33) can sample
+    // the scene intervals of this same analysis.
+    let scene_run = match &scenes {
+        Stage::Completed { run, .. } => Some(run),
+        _ => None,
+    };
+    let visible_text = match (request.profile.visible_text, producers.visible_text) {
+        (false, _) => Stage::NotRequested,
+        (true, None) => stage_without_producer(cancellation),
+        (true, Some(producer)) if producer.requires_scenes() && !cancellation.is_cancelled() => {
+            match scene_run {
+                None => Stage::Failed {
+                    receipt: None,
+                    reason: scenes_missing_reason(request.profile.scenes.is_some()),
+                },
+                Some(scene_run) => run_stage(
+                    &context,
+                    cache,
+                    Modality::VisibleText,
+                    scene_bound_identity(&producer.identity(), scene_run),
+                    |run: &VisibleTextRun| &run.receipt,
+                    CachedStage::VisibleText,
+                    |cached| match cached {
+                        CachedStage::VisibleText(run) => Some(run),
+                        _ => None,
+                    },
+                    Some(scene_run),
+                    Some(scene_run),
+                    |input| producer.run(input),
+                ),
+            }
+        }
+        (true, Some(producer)) => run_stage(
+            &context,
+            cache,
+            Modality::VisibleText,
+            producer.identity(),
+            |run: &VisibleTextRun| &run.receipt,
+            CachedStage::VisibleText,
+            |cached| match cached {
+                CachedStage::VisibleText(run) => Some(run),
+                _ => None,
+            },
+            scene_run,
+            None,
+            |input| producer.run(input),
+        ),
+    };
     let analysis = compose(&CompositionInput {
         media: request.media.clone(),
         speech: speech.input(),
@@ -258,6 +293,18 @@ pub(crate) fn analyze(
     })
 }
 
+fn scenes_missing_reason(scenes_requested: bool) -> String {
+    if scenes_requested {
+        "the visible-text producer samples the scene intervals of this analysis, but the \
+         scene stage did not complete; fix the scene stage (see its status) and rerun"
+            .to_string()
+    } else {
+        "the visible-text producer samples the scene intervals of this analysis, but scenes \
+         were not requested; add a scene configuration to the analysis profile"
+            .to_string()
+    }
+}
+
 fn stage_without_producer<R>(cancellation: &CancellationToken) -> Stage<R> {
     if cancellation.is_cancelled() {
         Stage::Cancelled
@@ -275,6 +322,8 @@ fn run_stage<R: Clone>(
     receipt_of: impl Fn(&R) -> &ProducerReceipt,
     wrap: impl Fn(R) -> CachedStage,
     unwrap: impl Fn(CachedStage) -> Option<R>,
+    scenes: Option<&SceneRun>,
+    required_scenes: Option<&SceneRun>,
     execute: impl FnOnce(&ProducerInput<'_>) -> Result<R, ProducerError>,
 ) -> Stage<R> {
     if context.cancellation.is_cancelled() {
@@ -309,7 +358,17 @@ fn run_stage<R: Clone>(
     // A caller-owned cache entry is reused only if it passes the same checks as a fresh
     // run; otherwise it is treated as a miss and the producer runs again.
     if let Some(run) = cache.get(&key).and_then(&unwrap) {
-        if validate_run(context, modality, &identity, &receipt_of, &wrap, &run).is_ok() {
+        if validate_run(
+            context,
+            modality,
+            &identity,
+            &receipt_of,
+            &wrap,
+            &run,
+            required_scenes,
+        )
+        .is_ok()
+        {
             return Stage::Completed { run, reused: true };
         }
     }
@@ -319,6 +378,7 @@ fn run_stage<R: Clone>(
         media_path: context.verified.path,
         input_hash: context.input_hash,
         cancellation: context.cancellation,
+        scenes,
     };
     context.verified.touched();
     let outcome = execute(&input);
@@ -335,7 +395,15 @@ fn run_stage<R: Clone>(
             }
         }
     };
-    if let Err(reason) = validate_run(context, modality, &identity, &receipt_of, &wrap, &run) {
+    if let Err(reason) = validate_run(
+        context,
+        modality,
+        &identity,
+        &receipt_of,
+        &wrap,
+        &run,
+        required_scenes,
+    ) {
         // The attempted receipt always names the right modality, so the failure itself can
         // still be composed alongside the other stages.
         return Stage::Failed {
@@ -357,10 +425,16 @@ fn validate_run<R: Clone>(
     receipt_of: &impl Fn(&R) -> &ProducerReceipt,
     wrap: &impl Fn(R) -> CachedStage,
     run: &R,
+    required_scenes: Option<&SceneRun>,
 ) -> Result<(), String> {
     if let Some(reason) = receipt_mismatch(receipt_of(run), modality, identity, context.input_hash)
     {
         return Err(reason);
+    }
+    if let (Some(scenes), CachedStage::VisibleText(text)) = (required_scenes, wrap(run.clone())) {
+        if let Some(reason) = observation_outside_scenes(&text, scenes) {
+            return Err(reason);
+        }
     }
     compose(&single_stage_input(
         context.media,
@@ -369,6 +443,31 @@ fn validate_run<R: Clone>(
     ))
     .map(|_| ())
     .map_err(|error| format!("producer run is not composable: {error}"))
+}
+
+/// A scene-dependent run claims its frames were sampled from `scenes`; reject one (fresh
+/// or cached) with an observation outside every scene interval.
+fn observation_outside_scenes(run: &VisibleTextRun, scenes: &SceneRun) -> Option<String> {
+    run.observations.iter().find_map(|observation| {
+        // Composition places evidence by time, so the timestamp must lie in the half-open
+        // scene interval; a frame index, when both sides have one, must agree.
+        let inside = scenes.scenes.iter().any(|scene| {
+            let in_time = scene.start_seconds <= observation.timestamp_seconds
+                && observation.timestamp_seconds < scene.end_seconds;
+            let in_frames = match (observation.frame_index, scene.start_frame, scene.end_frame) {
+                (Some(frame), Some(start), Some(end)) => start <= frame && frame < end,
+                _ => true,
+            };
+            in_time && in_frames
+        });
+        (!inside).then(|| {
+            format!(
+                "visible-text observation `{}` lies outside the scene intervals it was \
+                 sampled from",
+                observation.id
+            )
+        })
+    })
 }
 
 fn single_stage_input(
@@ -498,4 +597,67 @@ fn detect_scenes(
         },
         scenes,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use media_intelligence_core::OcrObservation;
+
+    fn receipt(modality: Modality) -> ProducerReceipt {
+        ProducerReceipt {
+            modality,
+            producer: "p".to_string(),
+            producer_version: "1".to_string(),
+            model: "m".to_string(),
+            model_version: "1".to_string(),
+            config_hash: "c".to_string(),
+            input_hash: "i".to_string(),
+            run_id: None,
+            config: None,
+        }
+    }
+
+    fn check(frame: Option<u64>, seconds: f64) -> Option<String> {
+        let scenes = SceneRun {
+            receipt: receipt(Modality::Scene),
+            scenes: vec![SceneInterval {
+                id: "s0".to_string(),
+                index: 0,
+                start_seconds: 0.0,
+                end_seconds: 4.0,
+                start_frame: Some(0),
+                end_frame: Some(100),
+            }],
+        };
+        let run = VisibleTextRun {
+            receipt: receipt(Modality::VisibleText),
+            observations: vec![OcrObservation {
+                id: "o".to_string(),
+                text: "t".to_string(),
+                timestamp_seconds: seconds,
+                frame_index: frame,
+                language: None,
+                region: None,
+                confidence: None,
+            }],
+            tracks: vec![],
+        };
+        observation_outside_scenes(&run, &scenes)
+    }
+
+    #[test]
+    fn scene_membership_needs_time_and_frame_inside_the_half_open_interval() {
+        assert!(check(Some(50), 2.0).is_none());
+        assert!(check(None, 2.0).is_none());
+        assert!(
+            check(Some(50), 9.0).is_some(),
+            "stale timestamp with an in-range frame"
+        );
+        assert!(check(Some(150), 2.0).is_some(), "frame outside");
+        assert!(
+            check(None, 4.0).is_some(),
+            "exactly at the scene end is outside"
+        );
+    }
 }
