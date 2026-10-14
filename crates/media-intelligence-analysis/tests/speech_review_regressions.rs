@@ -93,3 +93,18 @@ fn stale_model_dir_is_ignored_when_a_bundle_is_selected() {
         other => panic!("{other:?}"),
     }
 }
+
+#[test]
+fn whisperx_extra_args_are_refused_without_network_permission() {
+    let provider = TranscriptionProviderSelection::ExternalWhisperX(WhisperXCommandOptions {
+        model_cache_only: true,
+        no_align: true,
+        diarize: false,
+        extra_args: vec!["--vad_method".to_string(), "silero".to_string()],
+        ..WhisperXCommandOptions::default()
+    });
+    assert!(matches!(
+        AudioAnalysisSpeechProducer::new(AudioAnalysisSpeechConfig::new(provider)),
+        Err(SpeechAdapterError::ModelFetchNotAllowed { .. })
+    ));
+}

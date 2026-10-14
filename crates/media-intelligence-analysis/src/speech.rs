@@ -17,7 +17,9 @@
 //!   * external WhisperX without `model_cache_only`;
 //!   * enabled forced alignment with neither `model_bundle` nor `model_cache_only`;
 //!   * external WhisperX with alignment enabled (`no_align = false`) or `diarize`: its
-//!     torchaudio/NLTK alignment and pyannote diarization ignore `model_cache_only`.
+//!     torchaudio/NLTK alignment and pyannote diarization ignore `model_cache_only`;
+//!   * external WhisperX with any `extra_args` (free-form flags such as
+//!     `--vad_method silero`, which loads through torch.hub, cannot be vetted).
 //!
 //!   whisper.cpp (explicit `model_path`) and diarization (local bundles) never download.
 //!   The refusal happens at construction, before anything runs.
@@ -154,6 +156,19 @@ impl AudioAnalysisSpeechConfig {
                 return Some(
                     "external WhisperX without `model_cache_only` may download models; set \
                      `model_cache_only` with a populated `model_dir`"
+                        .to_string(),
+                );
+            }
+            TranscriptionProviderSelection::ExternalWhisperX(options)
+                if !options.extra_args.is_empty() =>
+            {
+                // Free-form WhisperX flags (for example `--vad_method silero`, which loads
+                // through torch.hub) can enable network-capable paths this adapter cannot
+                // vet.
+                return Some(
+                    "external WhisperX `extra_args` can select network-capable components \
+                     (for example `--vad_method silero` via torch.hub); remove them or allow \
+                     network access"
                         .to_string(),
                 );
             }
