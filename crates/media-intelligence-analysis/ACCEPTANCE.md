@@ -95,3 +95,108 @@ passes).
 - No interruption inside the visual-analysis scene run itself (cancellation is checked
   between stages and inside caller producers).
 - Index/query fusion (#26) and consumer adoption.
+
+# Acceptance: issue #32 (audio-analysis speech producer adapter)
+
+The independent acceptance agent wrote these tests **before** any implementation existed.
+The public API in `src/speech.rs` (feature `audio-analysis`) is the acceptance seam. Its
+bodies are `todo!("implementation pending (#32)")`.
+
+## Spec sources
+
+- media-intelligence issue #32 (body) and its work-loop preflight comment of 2026-10-14.
+- audio-analysis `cc8075f633a4bda5d1b9902b3f4c4d07eca017d9`,
+  `crates/audio/audio-analysis-transcription/src/lib.rs`: `transcribe`,
+  `TranscriptionPipelineRequest`, `TranscriptionProviderSelection` (with `provider_id()` and
+  `model_id()`), `TranscriptionPipelineResponse`, and the Candle model resolution in
+  `native_whisper.rs` (bundle, else cache-only, else Hugging Face download).
+- The #27 slice 1 seam in `src/lib.rs` (`SpeechProducer`, `ProducerIdentity`, `analyze`,
+  `StageCache`) and `media-intelligence-core`'s `SpeechRun::from_timed_text`.
+
+## API under test
+
+- Features: `audio-analysis` (off by default) adds the exact-rev git dependency
+  `moenarch-audio-analysis-transcription` at `cc8075f6` with default features off.
+  `audio-analysis-candle` also forwards audio-analysis `candle` for real native inference.
+  No test needs it, and CI is not expected to build it.
+- `speech::AUDIO_ANALYSIS_REVISION`, `SPEECH_PRODUCER_PREFIX` (`audio-analysis`) and
+  `UNSPECIFIED_MODEL_VERSION` (`unspecified`).
+- `speech::transcription` re-exports the pinned upstream crate.
+- `ModelFetchPolicy { LocalOnly (default), AllowNetwork }`.
+- `AudioAnalysisSpeechConfig { provider, vad, alignment, diarization, model_version,
+  model_fetch }`, with `::new(provider)` and `config_hash()`.
+- `AudioAnalysisSpeechProducer::new(config) -> Result<_, SpeechAdapterError>`, with
+  `config()` and `transcription_request(media_path)`. It implements `SpeechProducer`.
+- `SpeechAdapterError::ModelFetchNotAllowed { reason }`.
+- `speech_run_from_response(identity, input_hash, response)` is a pure mapping.
+
+## Tests (all gated by `#![cfg(feature = "audio-analysis")]`)
+
+| File | Proves |
+| --- | --- |
+| `speech_adapter_identity.rs` | <ul><li>The revision constant is exactly `cc8075f6…`.</li><li>`new` defaults: default VAD, alignment and diarization off, no model version, `LocalOnly`.</li><li>Identity = `audio-analysis:<provider id>` / revision / model id / declared model version or `unspecified` / `config_hash()`, for candle-whisper, whisper-cpp and whisperx-command.</li><li>The hash is `sha256:<64 lowercase hex>` and deterministic for equal configs.</li><li>Each of 15 effective option changes changes the hash, and all 15 hashes differ: model id, language, task, compute type, device, model bundle, batch chunks, max batch size, decode runtime, VAD enabled/threshold/max chunk, alignment, diarization, provider kind.</li><li>The fetch permission and the declared model version do not change the hash. The version still changes the identity.</li><li>`transcription_request` passes source `Path { media_path }`, the provider, VAD, alignment and diarization through unchanged.</li></ul> |
+| `speech_adapter_model_policy.rs` | <ul><li>Under `LocalOnly`, construction refuses these with `ModelFetchNotAllowed`: Candle without a bundle and not cache-only (also with only a `model_dir`), WhisperX without `model_cache_only`, cache-only WhisperX with alignment (`no_align: false`, the default) or `diarize: true`, and enabled alignment without a bundle and not cache-only.</li><li>Each reason names the local alternative.</li><li>Each refused config is accepted with `AllowNetwork`.</li><li>Cache-only and bundled configs, cache-only WhisperX with `no_align: true` and `diarize: false`, whisper.cpp, and disabled alignment are accepted without permission.</li></ul> |
+| `speech_adapter_execution.rs` | <ul><li>On the real three-scene clip:<ul><li>A missing Candle bundle, a whisper.cpp `model_path` that is absent or missing, and a missing cache-only `model_dir` each give speech `Failed`. The reason names the option and the path. Coverage is `Failed`, and there is no speech evidence.</li><li>Scenes still complete with 3 scenes.</li><li>Nothing is cached for speech, and a rerun retries speech while scenes are `Reused`.</li></ul></li><li>An existing but empty bundle reaches audio-analysis. Its pipeline error makes speech `Failed` only.</li><li>Cancellation:<ul><li>A direct `run` with a cancelled token, a missing bundle and a missing media path is `Err(Cancelled)`, not `Failed`. This proves the token is checked before any file system or audio-analysis work.</li><li>A pre-cancelled `analyze` gives speech `Cancelled` and an empty cache.</li></ul></li><li>Reuse:<ul><li>A speech run planted under the adapter's identity is `Reused` with its receipt and 2 items, and it reruns identically. The bundle is missing, so an execution could only have failed.</li><li>Changing the language gives a new identity. Speech re-executes and fails, while scenes stay `Reused` with the same ids.</li></ul></li></ul> |
+| `speech_adapter_mapping.rs` | <ul><li>A recorded `TranscriptionPipelineResponse` JSON in the upstream shape maps to exact segments: times, text, confidence 0.875/0.5/None, segment language with fallback to the transcript language, and speaker.</li><li>The receipt is `Speech` with every identity field and the input hash.</li><li>The result equals `SpeechRun::from_timed_text` of the same transcript.</li><li>An empty transcript gives an empty run.</li><li>These give `ProducerError::Failed`: `accepted: false` (the reason carries the diagnostics), a provider or model mismatch with the identity, and an untimed segment.</li></ul> |
+
+Run: `CARGO_BUILD_JOBS=2 cargo test --locked -p media-intelligence-analysis --features audio-analysis`.
+At the acceptance commit it compiles. 25 of the 26 #32 tests fail at `todo!`, and the
+revision-constant test passes. The 30 pre-existing tests (#27) pass with and without the
+feature.
+
+## Dependency graph (#32)
+
+- `moenarch-audio-analysis-transcription` 0.1.15 at audio-analysis `cc8075f6` is an
+  exact-rev git dependency with default features off. It pulls
+  `-speakers`, `-recognition` and `-core` from the same revision.
+- audio-analysis requires exact registry versions of Foundation crates. Its source-deps file
+  names Foundation `fb51ab4`, an ancestor of the pinned `b0e26e4` with identical versions.
+  `[patch.crates-io]` now also covers `moenarch-math-signal-core`, `-model-runtime` and
+  `-tensor-data`. `cargo tree -d` shows no duplicate `moenarch-*` crate. Third-party
+  duplicates such as `getrandom` come from upstream.
+- `audio-analysis-recognition` depends unconditionally on Foundation `model-runtime`. That
+  links `hf-hub`/`ureq`/`rustls` into the feature build. The network capability is upstream
+  code, which this adapter must not reach without `AllowNetwork`.
+- The transcription crate has a `cmake` build dependency. Its build script does nothing
+  unless the upstream `native` feature is on, and this crate does not enable `native`.
+
+## Decisions fixed by these tests (resolved by the acceptance agent)
+
+- **Permission is explicit and checked at construction.** `ModelFetchPolicy::AllowNetwork`
+  is the only opt-in. The refusal is a constructor error, not a `Failed` stage. Missing
+  model files are a run-time `Failed`, because files may appear between construction and
+  run.
+- **Download-capable** is defined from the upstream resolution code: no Candle bundle and
+  not cache-only; WhisperX without cache-only; WhisperX with alignment (`no_align: false`)
+  or `diarize: true` even when cache-only, because upstream WhisperX ignores
+  `model_cache_only` for torchaudio alignment bundles and the pyannote diarization
+  pipeline (whisperx `alignment.py` `load_align_model`, `transcribe.py`; Codex review on
+  #37); or enabled native alignment without a bundle and not cache-only. whisper.cpp and
+  native diarization (local bundles) never download.
+- **Identity layout:** `producer` = `audio-analysis:<provider id>`, and `model` = the
+  selection's model id. `model_version` is caller-declared, because audio-analysis reports
+  none. It falls back to `unspecified`.
+- **The config hash covers model locations** (bundle, dir and path). Different local
+  weights under the same model id must not share cached results. A side effect is that
+  cache keys are machine-specific. The hash excludes the fetch permission and the declared
+  model version. The exact hash input string is not pinned.
+- **Local model locations are pre-checked** by the adapter before audio-analysis is called,
+  so the failure reason is actionable (option + path) rather than a downstream decode
+  error.
+- **Response guards:** `accepted: false`, or a provider or model id other than the identity,
+  is `Failed`.
+
+## What #32 acceptance does not prove
+
+- **No ASR model is executed.** No test loads model weights or recognises words, and there
+  are no model files on the test machine. Reused speech is a planted cache entry, and the
+  mapping input is hand-written JSON. Real recognition from a local clip is the
+  model-backed acceptance (#34).
+- No network test exists. "Refused before any network attempt" is shown by construction
+  failing before any run. Without `audio-analysis-candle`, the Candle download code is not
+  compiled at all.
+- The test clip has no audio track, so audio decoding of real media is not exercised.
+  Whether the adapter enables audio-analysis `audio-io` for container decoding is left to
+  the implementation and #34.
+- Cancellation inside a running pipeline (the upstream observer's
+  `cancellation_requested`) is not tested. Only cancellation before the run is.

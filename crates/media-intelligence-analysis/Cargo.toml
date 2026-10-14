@@ -17,6 +17,16 @@ serde_json.workspace = true
 sha2.workspace = true
 video-analysis-ffmpeg.workspace = true
 video-analysis-ingest.workspace = true
+audio-analysis-transcription = { workspace = true, optional = true }
+
+[features]
+default = []
+# Opt-in speech producer adapter (#32) over audio-analysis transcription. Without a further
+# runtime feature, the adapter compiles, but the native Candle Whisper provider reports
+# that the runtime is missing.
+audio-analysis = ["dep:audio-analysis-transcription"]
+# Real native Candle Whisper inference (heavy compile; not built by default CI or tests).
+audio-analysis-candle = ["audio-analysis", "audio-analysis-transcription/candle"]
 
 [dev-dependencies]
 tempfile.workspace = true

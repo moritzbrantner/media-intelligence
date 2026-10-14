@@ -67,6 +67,11 @@ jobs:
         shell: bash
         run: cargo test --locked 2>&1 | tee test.log
 
+      - name: Lint and test the audio-analysis speech adapter feature
+        run: |
+          cargo clippy --locked -p media-intelligence-analysis --all-targets --features audio-analysis -- -D warnings
+          cargo test --locked -p media-intelligence-analysis --features audio-analysis
+
       - name: Require real scene-producer execution
         run: "! grep -q SKIPPED test.log"
 
