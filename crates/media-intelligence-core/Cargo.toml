@@ -1,0 +1,18 @@
+[package]
+name = "media-intelligence-core"
+description = "Embeddable composition of recorded speech, visible-text and scene evidence into one source-grounded multimodal analysis."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "media_intelligence_core"
+
+[dependencies]
+moenarch-corpus-core.workspace = true
+moenarch-media-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true

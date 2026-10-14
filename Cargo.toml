@@ -1,0 +1,18 @@
+[workspace]
+members = ["crates/media-intelligence-core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+repository = "https://github.com/moritzbrantner/media-intelligence"
+
+[workspace.dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+sha2 = "0.10.9"
+# Neutral Foundation contracts, pinned to an exact public revision (owner rule 2026-10-10:
+# exact-rev git dependencies, no crates.io publishes, no path dependencies).
+moenarch-corpus-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
+moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
