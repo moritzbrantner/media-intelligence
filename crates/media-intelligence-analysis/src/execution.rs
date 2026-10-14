@@ -199,6 +199,7 @@ pub(crate) fn analyze(
                 _ => None,
             },
             None,
+            None,
             |input| producer.run(input),
         ),
     };
@@ -215,6 +216,7 @@ pub(crate) fn analyze(
                 CachedStage::Scenes(run) => Some(run),
                 _ => None,
             },
+            None,
             None,
             |input| detect_scenes(input, config),
         ),
@@ -247,6 +249,7 @@ pub(crate) fn analyze(
                         _ => None,
                     },
                     Some(scene_run),
+                    Some(scene_run),
                     |input| producer.run(input),
                 ),
             }
@@ -263,6 +266,7 @@ pub(crate) fn analyze(
                 _ => None,
             },
             scene_run,
+            None,
             |input| producer.run(input),
         ),
     };
@@ -319,6 +323,7 @@ fn run_stage<R: Clone>(
     wrap: impl Fn(R) -> CachedStage,
     unwrap: impl Fn(CachedStage) -> Option<R>,
     scenes: Option<&SceneRun>,
+    required_scenes: Option<&SceneRun>,
     execute: impl FnOnce(&ProducerInput<'_>) -> Result<R, ProducerError>,
 ) -> Stage<R> {
     if context.cancellation.is_cancelled() {
@@ -353,7 +358,17 @@ fn run_stage<R: Clone>(
     // A caller-owned cache entry is reused only if it passes the same checks as a fresh
     // run; otherwise it is treated as a miss and the producer runs again.
     if let Some(run) = cache.get(&key).and_then(&unwrap) {
-        if validate_run(context, modality, &identity, &receipt_of, &wrap, &run).is_ok() {
+        if validate_run(
+            context,
+            modality,
+            &identity,
+            &receipt_of,
+            &wrap,
+            &run,
+            required_scenes,
+        )
+        .is_ok()
+        {
             return Stage::Completed { run, reused: true };
         }
     }
@@ -380,7 +395,15 @@ fn run_stage<R: Clone>(
             }
         }
     };
-    if let Err(reason) = validate_run(context, modality, &identity, &receipt_of, &wrap, &run) {
+    if let Err(reason) = validate_run(
+        context,
+        modality,
+        &identity,
+        &receipt_of,
+        &wrap,
+        &run,
+        required_scenes,
+    ) {
         // The attempted receipt always names the right modality, so the failure itself can
         // still be composed alongside the other stages.
         return Stage::Failed {
@@ -402,10 +425,16 @@ fn validate_run<R: Clone>(
     receipt_of: &impl Fn(&R) -> &ProducerReceipt,
     wrap: &impl Fn(R) -> CachedStage,
     run: &R,
+    required_scenes: Option<&SceneRun>,
 ) -> Result<(), String> {
     if let Some(reason) = receipt_mismatch(receipt_of(run), modality, identity, context.input_hash)
     {
         return Err(reason);
+    }
+    if let (Some(scenes), CachedStage::VisibleText(text)) = (required_scenes, wrap(run.clone())) {
+        if let Some(reason) = observation_outside_scenes(&text, scenes) {
+            return Err(reason);
+        }
     }
     compose(&single_stage_input(
         context.media,
@@ -414,6 +443,29 @@ fn validate_run<R: Clone>(
     ))
     .map(|_| ())
     .map_err(|error| format!("producer run is not composable: {error}"))
+}
+
+/// A scene-dependent run claims its frames were sampled from `scenes`; reject one (fresh
+/// or cached) with an observation outside every scene interval.
+fn observation_outside_scenes(run: &VisibleTextRun, scenes: &SceneRun) -> Option<String> {
+    run.observations.iter().find_map(|observation| {
+        let inside = scenes.scenes.iter().any(|scene| {
+            match (observation.frame_index, scene.start_frame, scene.end_frame) {
+                (Some(frame), Some(start), Some(end)) => start <= frame && frame < end,
+                _ => {
+                    scene.start_seconds <= observation.timestamp_seconds
+                        && observation.timestamp_seconds <= scene.end_seconds
+                }
+            }
+        });
+        (!inside).then(|| {
+            format!(
+                "visible-text observation `{}` lies outside the scene intervals it was \
+                 sampled from",
+                observation.id
+            )
+        })
+    })
 }
 
 fn single_stage_input(

@@ -291,8 +291,15 @@ impl VisibleTextProducer for VisualAnalysisOcrProducer {
             .ok_or_else(|| failed("the video stream declares no frame rate".to_string()))?;
         let scenes = upstream_scenes(scene_run, frame_rate)?;
         let request = self.config.request.clone();
-        let video_id = input.media.asset_id.as_str();
-        let duration = input.media.duration_seconds;
+        // Content-derived inputs only, so the result depends on nothing outside the stage
+        // key (content hash, producer identity, scene intervals): the track-id namespace is
+        // the content hash and the duration is the end of the last scene.
+        let video_id = input.media.content_hash.as_str();
+        let duration = scene_run
+            .scenes
+            .iter()
+            .map(|scene| scene.end_seconds)
+            .max_by(f64::total_cmp);
         let analysis = match &self.config.backend {
             OcrBackendConfig::OnnxTrOcr(options) => {
                 let backend = ocr::OnnxTrOcrBackend::from_local_model(options.clone())
