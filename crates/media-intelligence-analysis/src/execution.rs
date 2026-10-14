@@ -1,10 +1,10 @@
 //! Implementation of [`crate::analyze`]: media integrity, stage selection, cache reuse,
 //! producer execution, receipt checks and composition.
 
+use std::cell::Cell;
 use std::fs::{File, Metadata};
 use std::io::Read;
 use std::path::Path;
-use std::time::SystemTime;
 
 use media_intelligence_core::{
     compose, CompositionInput, ModalityInput, SceneInterval, SceneRun, SpeechRun, VisibleTextRun,
@@ -33,23 +33,32 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 /// The media file as verified at the start of the operation.
+///
+/// Metadata (size, modification time) is never taken as proof of unchanged bytes: every
+/// check re-hashes. To bound the cost, the bytes are re-hashed only after a producer has
+/// had access to the file since the last successful check (`dirty`), so an operation hashes
+/// the file once up front plus once after each executed producer.
 struct VerifiedMedia<'a> {
     path: &'a Path,
     declared: &'a ContentHash,
-    len: u64,
-    modified: Option<SystemTime>,
+    dirty: Cell<bool>,
 }
 
 impl VerifiedMedia<'_> {
-    /// Whether the bytes still hash to the declared content hash. Unchanged size and
-    /// modification time are taken as unchanged bytes; anything else is re-hashed.
+    /// Whether the bytes still hash to the declared content hash.
     fn unchanged(&self) -> Result<bool, String> {
-        let metadata = std::fs::metadata(self.path).map_err(|error| error.to_string())?;
-        if metadata.len() == self.len && metadata.modified().ok() == self.modified {
+        if !self.dirty.get() {
             return Ok(true);
         }
         let actual = hash_file(self.path).map_err(|error| error.to_string())?;
-        Ok(&actual == self.declared)
+        let unchanged = &actual == self.declared;
+        self.dirty.set(!unchanged);
+        Ok(unchanged)
+    }
+
+    /// A producer is about to get (or just had) access to the file.
+    fn touched(&self) {
+        self.dirty.set(true);
     }
 }
 
@@ -143,11 +152,11 @@ pub(crate) fn analyze(
     cancellation: &CancellationToken,
 ) -> Result<AnalysisReport, AnalysisError> {
     let path = request.media_path.as_path();
-    let Some(metadata) = regular_file_metadata(path) else {
+    if regular_file_metadata(path).is_none() {
         return Err(AnalysisError::MediaMissing {
             path: request.media_path.clone(),
         });
-    };
+    }
     if let Some(config) = &request.profile.scenes {
         config.validate()?;
     }
@@ -165,8 +174,7 @@ pub(crate) fn analyze(
     let verified = VerifiedMedia {
         path,
         declared,
-        len: metadata.len(),
-        modified: metadata.modified().ok(),
+        dirty: Cell::new(false),
     };
     let input_hash = input_hash(declared);
     let context = Context {
@@ -277,10 +285,6 @@ fn run_stage<R: Clone>(
         content_hash: context.media.content_hash.clone(),
         producer: identity.clone(),
     };
-    if let Some(run) = cache.get(&key).and_then(&unwrap) {
-        return Stage::Completed { run, reused: true };
-    }
-
     let attempted = attempted_receipt(modality, &identity, context.input_hash);
     let changed = |when: &str| -> Option<Stage<R>> {
         match context.verified.unchanged() {
@@ -297,8 +301,17 @@ fn run_stage<R: Clone>(
             }),
         }
     };
+    // Also guards cache reuse: a cached run describes the declared bytes only while the
+    // file still holds them.
     if let Some(failed) = changed("before") {
         return failed;
+    }
+    // A caller-owned cache entry is reused only if it passes the same checks as a fresh
+    // run; otherwise it is treated as a miss and the producer runs again.
+    if let Some(run) = cache.get(&key).and_then(&unwrap) {
+        if validate_run(context, modality, &identity, &receipt_of, &wrap, &run).is_ok() {
+            return Stage::Completed { run, reused: true };
+        }
     }
 
     let input = ProducerInput {
@@ -307,7 +320,12 @@ fn run_stage<R: Clone>(
         input_hash: context.input_hash,
         cancellation: context.cancellation,
     };
-    let run = match execute(&input) {
+    context.verified.touched();
+    let outcome = execute(&input);
+    if let Some(failed) = changed("after") {
+        return failed;
+    }
+    let run = match outcome {
         Ok(run) => run,
         Err(ProducerError::Cancelled) => return Stage::Cancelled,
         Err(ProducerError::Failed { reason }) => {
@@ -317,32 +335,40 @@ fn run_stage<R: Clone>(
             }
         }
     };
-    if let Some(failed) = changed("after") {
-        return failed;
-    }
-
-    let receipt = receipt_of(&run);
-    if let Some(reason) = receipt_mismatch(receipt, modality, &identity, context.input_hash) {
+    if let Err(reason) = validate_run(context, modality, &identity, &receipt_of, &wrap, &run) {
+        // The attempted receipt always names the right modality, so the failure itself can
+        // still be composed alongside the other stages.
         return Stage::Failed {
-            receipt: Some(receipt.clone()),
+            receipt: Some(attempted),
             reason,
-        };
-    }
-    // Reject a run the core cannot compose here, so one bad producer run fails only its
-    // own stage instead of the whole operation.
-    if let Err(error) = compose(&single_stage_input(
-        context.media,
-        modality,
-        &wrap(run.clone()),
-    )) {
-        return Stage::Failed {
-            receipt: Some(receipt.clone()),
-            reason: format!("producer run is not composable: {error}"),
         };
     }
 
     cache.put(key, wrap(run.clone()));
     Stage::Completed { run, reused: false }
+}
+
+/// Receipt identity and composability checks shared by fresh and cached runs, so one bad
+/// run fails only its own stage instead of the whole operation.
+fn validate_run<R: Clone>(
+    context: &Context<'_>,
+    modality: Modality,
+    identity: &ProducerIdentity,
+    receipt_of: &impl Fn(&R) -> &ProducerReceipt,
+    wrap: &impl Fn(R) -> CachedStage,
+    run: &R,
+) -> Result<(), String> {
+    if let Some(reason) = receipt_mismatch(receipt_of(run), modality, identity, context.input_hash)
+    {
+        return Err(reason);
+    }
+    compose(&single_stage_input(
+        context.media,
+        modality,
+        &wrap(run.clone()),
+    ))
+    .map(|_| ())
+    .map_err(|error| format!("producer run is not composable: {error}"))
 }
 
 fn single_stage_input(
