@@ -71,7 +71,7 @@ pub use media_intelligence_core::{
 };
 
 /// Exact `visual-analysis` revision whose scene path this crate invokes.
-pub const VISUAL_ANALYSIS_REVISION: &str = "115c1f0caceb644993df3121b4625e674a9f1b7a";
+pub const VISUAL_ANALYSIS_REVISION: &str = "f73969447916e5ac47f4559fc51ab47552f4f734";
 /// Producer name written into scene receipts.
 pub const SCENE_PRODUCER: &str = "visual-analysis";
 /// Model (algorithm) name written into scene receipts.
@@ -234,8 +234,21 @@ pub trait VisibleTextProducer {
 /// unchanged. Equal inputs give equal results; a different scene configuration (a different
 /// scene receipt `config_hash`) or a different own `config_hash` gives a different hash.
 pub fn scene_bound_identity(identity: &ProducerIdentity, scenes: &SceneRun) -> ProducerIdentity {
-    let _ = (identity, scenes);
-    todo!("implementation pending (#33)")
+    let scene = &scenes.receipt;
+    let material = serde_json::json!({
+        "ownConfigHash": identity.config_hash,
+        "scenes": [
+            scene.producer,
+            scene.producer_version,
+            scene.model,
+            scene.model_version,
+            scene.config_hash,
+        ],
+    });
+    ProducerIdentity {
+        config_hash: execution::sha256_prefixed(material.to_string().as_bytes()),
+        ..identity.clone()
+    }
 }
 
 /// Whether a producer adapter may fetch models over the network (#32, #33).

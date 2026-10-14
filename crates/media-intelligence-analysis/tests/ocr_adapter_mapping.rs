@@ -133,7 +133,7 @@ fn recorded_output() -> SceneAwareOcrAnalysis {
 fn identity() -> ProducerIdentity {
     ProducerIdentity {
         producer: "visual-analysis:json-command".to_string(),
-        producer_version: "115c1f0caceb644993df3121b4625e674a9f1b7a".to_string(),
+        producer_version: "f73969447916e5ac47f4559fc51ab47552f4f734".to_string(),
         model: "fixture-ocr".to_string(),
         model_version: "fixture-1".to_string(),
         config_hash: "sha256:bound-config".to_string(),

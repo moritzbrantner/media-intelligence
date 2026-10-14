@@ -21,6 +21,7 @@ audio-analysis-transcription = { workspace = true, optional = true }
 image-analysis-ocr = { workspace = true, optional = true }
 video-analysis-core = { workspace = true, optional = true }
 video-analysis-recognition = { workspace = true, optional = true }
+num-rational = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -37,6 +38,7 @@ visual-analysis-ocr = [
     "dep:image-analysis-ocr",
     "dep:video-analysis-core",
     "dep:video-analysis-recognition",
+    "dep:num-rational",
     "video-analysis-ingest/ocr",
     "video-analysis-recognition/ocr",
 ]
