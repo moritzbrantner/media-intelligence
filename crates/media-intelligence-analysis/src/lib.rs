@@ -14,6 +14,8 @@
 //!   [`VisibleTextProducer`]) that the caller (or a later adapter) implements. A requested
 //!   modality without a producer is [`StageStatus::Unavailable`]; it is never reported as
 //!   completed.
+//! * With the opt-in `audio-analysis` feature, the `speech` module provides the canonical
+//!   speech producer adapter over `audio-analysis` transcription (#32).
 //!
 //! # Contract fixed by the acceptance tests (#27 slice 1)
 //!
@@ -46,6 +48,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 mod execution;
+#[cfg(feature = "audio-analysis")]
+pub mod speech;
 
 pub use media_intelligence_core::{
     AssetId, CompositionError, ContentHash, EvidenceAnalysis, MediaIdentity, Modality,
