@@ -25,10 +25,15 @@
 //! * Confidence values keep their producer- and modality-specific meaning; there is no
 //!   shared score field.
 //!
-//! Status: the public surface below is the acceptance seam for issue #25; the
-//! behaviour is not implemented yet.
+//! Evidence ids are `sha256:<hex>` digests of the asset id, content hash, modality, the
+//! receipt's producer/model/config/input identity (not its run id or recorded config
+//! value) and the item's producer-local id and payload. Re-composing the same source
+//! revision with the same producer identities therefore reuses every id, and changing
+//! one modality's producer identity changes only that modality's ids and the relations
+//! that touch them.
 
 pub mod compat;
+mod composition;
 
 use std::fmt::{Display, Formatter};
 
@@ -127,8 +132,7 @@ impl SpeechRun {
         receipt: ProducerReceipt,
         transcript: &TimedTextContract,
     ) -> Result<Self, CompositionError> {
-        let _ = (receipt, transcript);
-        todo!("implementation pending (#25)")
+        composition::speech_run_from_timed_text(receipt, transcript)
     }
 }
 
@@ -211,6 +215,9 @@ pub struct VisibleTextRun {
 /// What the caller knows about one modality.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
+// A plain serde input DTO built once per call; boxing the receipt would only complicate
+// construction and pattern matching for callers.
+#[allow(clippy::large_enum_variant)]
 pub enum ModalityInput<R> {
     /// The caller did not ask for this modality.
     NotRequested,
@@ -388,6 +395,17 @@ pub enum CompositionError {
     CompletedWithoutRun { modality: Modality },
     /// A producer-local id occurs twice within one run.
     DuplicateId { modality: Modality, id: String },
+    /// A track lists no member observation.
+    EmptyTrack { track_id: String },
+    /// One observation is a member of more than one track of its run, which would count
+    /// the same frame twice.
+    ObservationInMultipleTracks { observation_id: String },
+    /// Two runs of one modality carry the same producer identity, so their evidence ids
+    /// would collide.
+    DuplicateRun { modality: Modality },
+    /// A consumer row could not be placed on the timeline (for example an OCR
+    /// observation without a timestamp).
+    MissingTime { modality: Modality, item: String },
 }
 
 impl Display for CompositionError {
@@ -400,6 +418,5 @@ impl std::error::Error for CompositionError {}
 
 /// Composes one media object's recorded evidence into an [`EvidenceAnalysis`].
 pub fn compose(input: &CompositionInput) -> Result<EvidenceAnalysis, CompositionError> {
-    let _ = input;
-    todo!("implementation pending (#25)")
+    composition::compose(input)
 }
