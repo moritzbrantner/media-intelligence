@@ -16,6 +16,9 @@
 //!   completed.
 //! * With the opt-in `audio-analysis` feature, the `speech` module provides the canonical
 //!   speech producer adapter over `audio-analysis` transcription (#32).
+//! * With the opt-in `visual-analysis-ocr` feature, the `visible_text` module provides the
+//!   canonical visible-text producer adapter over visual-analysis scene-aware OCR and text
+//!   tracking (#33).
 //!
 //! # Contract fixed by the acceptance tests (#27 slice 1)
 //!
@@ -25,7 +28,16 @@
 //!   producer. A stage whose input bytes change while the operation runs must not be
 //!   reported as completed for the declared content hash.
 //! * Every receipt's `input_hash` is `sha256:<content hash hex>` ([`input_hash`]).
-//! * Stages run in [`Modality`] declaration order: speech, visible text, scenes.
+//! * Stages run in the order speech, scenes, visible text (#33; #27 slice 1 used the
+//!   [`Modality`] declaration order speech, visible text, scenes). The visible-text producer
+//!   receives the scene run completed or reused by the same analysis in
+//!   [`ProducerInput::scenes`]; every other producer receives `None`.
+//! * A visible-text producer whose [`VisibleTextProducer::requires_scenes`] is `true`
+//!   (#33) depends on that scene run: without one (scenes not requested, failed, or the
+//!   run rejected) its stage is [`StageStatus::Failed`] with a reason that names the scene
+//!   stage, and the producer is not invoked; this crate never runs a second, hidden scene
+//!   detection. Such a producer is keyed in the [`StageCache`] and receipted under
+//!   [`scene_bound_identity`], so a different scene run never reuses its cached result.
 //! * A stage is executed only when it is requested. Not-requested stages are never
 //!   executed, even when a producer is supplied.
 //! * Stage results are reused through a caller-owned [`StageCache`] keyed by
@@ -50,6 +62,8 @@ use serde::{Deserialize, Serialize};
 mod execution;
 #[cfg(feature = "audio-analysis")]
 pub mod speech;
+#[cfg(feature = "visual-analysis-ocr")]
+pub mod visible_text;
 
 pub use media_intelligence_core::{
     AssetId, CompositionError, ContentHash, EvidenceAnalysis, MediaIdentity, Modality,
@@ -170,6 +184,10 @@ pub struct ProducerInput<'a> {
     pub input_hash: &'a str,
     /// Long-running producers poll this and return [`ProducerError::Cancelled`].
     pub cancellation: &'a CancellationToken,
+    /// The scene run completed or reused by the same analysis (#33). Only the visible-text
+    /// stage, which runs after scenes, receives it; it is `None` for speech and scenes, and
+    /// for visible text when scenes were not requested or did not complete.
+    pub scenes: Option<&'a SceneRun>,
 }
 
 /// Why a producer did not return a run.
@@ -193,9 +211,42 @@ pub trait SpeechProducer {
 
 /// Caller-implemented visible-text (OCR) producer; same receipt rules as
 /// [`SpeechProducer`], with [`Modality::VisibleText`].
+///
+/// A producer that samples frames from the scene intervals of the same analysis (#33)
+/// returns `true` from [`requires_scenes`](Self::requires_scenes). Its run's receipt must
+/// then name [`scene_bound_identity`] of its identity and the scene run it received.
 pub trait VisibleTextProducer {
     fn identity(&self) -> ProducerIdentity;
+
+    /// Whether this producer needs [`ProducerInput::scenes`] (#33). Defaults to `false`;
+    /// such producers are keyed, receipted and run exactly as in #27 slice 1.
+    fn requires_scenes(&self) -> bool {
+        false
+    }
+
     fn run(&self, input: &ProducerInput<'_>) -> Result<VisibleTextRun, ProducerError>;
+}
+
+/// The identity under which a scene-dependent visible-text producer's run is cached and
+/// receipted (#33): `identity` with `config_hash` replaced by a deterministic
+/// `sha256:<64 hex>` over `identity.config_hash` and the scene run's receipt identity
+/// (producer, producer version, model, model version and config hash). Every other field is
+/// unchanged. Equal inputs give equal results; a different scene configuration (a different
+/// scene receipt `config_hash`) or a different own `config_hash` gives a different hash.
+pub fn scene_bound_identity(identity: &ProducerIdentity, scenes: &SceneRun) -> ProducerIdentity {
+    let _ = (identity, scenes);
+    todo!("implementation pending (#33)")
+}
+
+/// Whether a producer adapter may fetch models over the network (#32, #33).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelFetchPolicy {
+    /// Local models only (the default). Download-capable configurations are refused.
+    #[default]
+    LocalOnly,
+    /// The caller explicitly allows first-run model downloads and network access.
+    AllowNetwork,
 }
 
 /// The caller-supplied producers. `None` means the modality is unavailable.

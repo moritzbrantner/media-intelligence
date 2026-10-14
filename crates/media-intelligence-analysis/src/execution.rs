@@ -319,6 +319,9 @@ fn run_stage<R: Clone>(
         media_path: context.verified.path,
         input_hash: context.input_hash,
         cancellation: context.cancellation,
+        // #33 (stage order speech -> scenes -> visible text, scene hand-off and
+        // scene-bound identities) is pending; slice-1 behaviour is unchanged.
+        scenes: None,
     };
     context.verified.touched();
     let outcome = execute(&input);

@@ -71,6 +71,8 @@ passes).
 
 - **Stage order** is the `Modality` declaration order: speech, visible text, scenes. The
   mid-run cancellation and changed-bytes tests rely on speech running first.
+  *Superseded by #33:* the order is now speech, scenes, visible text (see the #33 section,
+  "Re-translated #27 contract").
 - **Integrity is checked up front.** A missing file, a hash mismatch or an invalid scene
   config is a whole-call `Err`, not a per-stage status, and no producer runs.
 - **Input hash convention**: `sha256:<ContentHash hex>`, matching the #25 scenedetect-rs
@@ -200,3 +202,179 @@ feature.
   the implementation and #34.
 - Cancellation inside a running pipeline (the upstream observer's
   `cancellation_requested`) is not tested. Only cancellation before the run is.
+
+# Acceptance: issue #33 (visual-analysis OCR + text-track producer adapter)
+
+The independent acceptance agent wrote these tests **before** any implementation existed.
+The acceptance seam is the #33 additions to `src/lib.rs` (`ProducerInput::scenes`,
+`VisibleTextProducer::requires_scenes`, `scene_bound_identity`, the shared
+`ModelFetchPolicy`) and `src/visible_text.rs` (feature `visual-analysis-ocr`). New bodies
+are `todo!("implementation pending (#33)")`. `src/execution.rs` only gained `scenes: None`
+so that the crate compiles; it still runs the #27 order.
+
+## Spec sources
+
+- media-intelligence issue #33 (body) and its work-loop preflight comment of 2026-10-14.
+- visual-analysis `115c1f0caceb644993df3121b4625e674a9f1b7a` (read-only):
+  - `crates/video/video-analysis-ingest/src/surface/scene_ocr.rs`:
+    `analyze_scene_aware_ocr(source, backend, OcrRequest, video_id, scenes, duration)` →
+    `SceneAwareOcrAnalysis { sampled_frames, observations, text_semantics }` (ingest
+    feature `ocr`).
+  - `crates/image/image-analysis-ocr/src/lib.rs`: `OcrBackend`, `OcrRequest`,
+    `OcrLocalModelOptions` (`auto_download`), `OnnxTrOcrBackend::from_local_model` (real
+    inference only with `local-onnx`), `JsonCommandOcrBackend` (PNG in, `OcrDocument` JSON
+    out).
+  - `crates/video/video-analysis-recognition/src/video_text_semantics.rs`:
+    `analyze_video_text_semantics`, `VideoTextTrack`, `VideoTextRole`; and
+    `model_analyzers.rs` `representative_scene_frames`, `ocr_document_observations`.
+- The #27/#32 seam in `src/lib.rs` and `src/speech.rs`, and `media-intelligence-core`'s
+  `VisibleTextRun`, `OcrObservation`, `OcrTrack`.
+
+## API under test
+
+- Core seam (all features):
+  - Stage order speech → scenes → visible text. `ProducerInput::scenes:
+    Option<&SceneRun>` hands the visible-text producer the scene run completed or reused by
+    the same analysis; speech and scenes get `None`.
+  - `VisibleTextProducer::requires_scenes()` (default `false`). For `true`: no scene run
+    → stage `Failed` with a reason naming the scene stage, producer not invoked, no hidden
+    scene detection; cache key and receipt use `scene_bound_identity(identity, scene_run)`.
+  - `scene_bound_identity(identity, scenes)`: `identity` with `config_hash` replaced by a
+    `sha256:<64 hex>` over its own config hash and the scene receipt identity.
+  - `ModelFetchPolicy` moved to the crate root; `speech::ModelFetchPolicy` re-exports it.
+- Feature `visual-analysis-ocr` (off by default) adds `visible_text`:
+  - re-exports `ocr` (image-analysis-ocr), `video_core`, `recognition`,
+    `SceneAwareOcrAnalysis`, `OcrRequest`, `OcrLocalModelOptions`, `OcrPreset`,
+    `VISUAL_ANALYSIS_REVISION`;
+  - constants `OCR_PRODUCER_PREFIX` (`visual-analysis`), `ONNX_TROCR_KIND`
+    (`onnx-trocr`), `JSON_COMMAND_KIND` (`json-command`), `UNSPECIFIED_MODEL_VERSION`;
+  - `OcrBackendConfig { OnnxTrOcr(OcrLocalModelOptions), JsonCommand { name, command, args } }`
+    with `kind()` and `model_id()`;
+  - `VisualAnalysisOcrConfig { backend, request, model_version, model_fetch }`, `::new`,
+    `config_hash()`;
+  - `VisualAnalysisOcrProducer::new(config) -> Result<_, OcrAdapterError>`, `config()`,
+    implementing `VisibleTextProducer` with `requires_scenes() == true`;
+  - `OcrAdapterError::ModelFetchNotAllowed { reason }`;
+  - `visible_text_run_from_analysis(identity, input_hash, &SceneAwareOcrAnalysis)`, pure.
+- Feature `visual-analysis-ocr-onnx` forwards image-analysis-ocr `local-onnx` (onnxruntime,
+  tokenizers) for real ONNX TrOCR inference. No test needs it and it is not built here.
+
+## Tests
+
+| File | Proves |
+| --- | --- |
+| `stage_order.rs` (default features) | <ul><li>`scene_bound_identity` changes only `config_hash`, is a deterministic lowercase `sha256:`, and differs for another scene config hash or another own config hash.</li><li>A generic visible-text producer receives exactly the composed scene run (3 scenes, same receipt) and keeps its plain identity.</li><li>**Order:** a visible-text producer that cancels leaves speech and scenes completed (3 scenes); under the #27 order scenes would be `Cancelled`.</li><li>A reused scene run is handed over.</li><li>Without requested scenes a generic producer runs with `None`.</li><li>A scene-dependent producer: `Failed` with a reason naming scenes, not invoked and nothing cached, when scenes are not requested or the scene stage failed (non-video bytes); keyed (`StageKey`) and receipted under the bound identity, and reused on an unchanged rerun; re-executed when the scene config changes (different bound hash); a receipt with the unbound identity is rejected (`Failed`, scenes intact); pre-cancelled → `Cancelled` (with or without scenes).</li></ul> |
+| `ocr_adapter_identity.rs` | <ul><li>Revision and kind constants.</li><li>`new` defaults: default `OcrRequest`, no version, `LocalOnly`.</li><li>`kind`/`model_id`: `json-command` + caller name; `onnx-trocr` + `Xenova/trocr-base-printed` / `-handwritten`.</li><li>Identity = `visual-analysis:<kind>` / revision / model id / declared version or `unspecified` / `config_hash()`, for both backends; `requires_scenes()` is true.</li><li>Hash: deterministic `sha256:<64 hex>`; each of 13 options changes it and all differ (JSON name, command, args; request languages, preserve_layout, include_tokens, min_confidence, attributes, technique; backend kind; ONNX preset, bundle_root, cache_dir).</li><li>Fetch permission, declared version and ONNX download settings (`auto_download`, `download_progress`, `hf_token`, `max_retries`) do not change it.</li></ul> |
+| `ocr_adapter_model_policy.rs` | <ul><li>ONNX `auto_download` under `LocalOnly` → `ModelFetchNotAllowed`, reason names `auto_download` and `bundle_root`.</li><li>Accepted with `AllowNetwork`.</li><li>ONNX without `auto_download` (even with an `hf_token`) and a JSON command are accepted without touching the file system (paths do not exist).</li></ul> |
+| `ocr_adapter_execution.rs` (ffmpeg + python3) | <ul><li>**End to end** on a red/green/blue slide clip (drawtext `RED SLIDE` etc.) with the real `JsonCommandOcrBackend` over a scripted command: scenes 3; visible text `CompletedWithFindings(3)`; receipt = bound identity (`visual-analysis:json-command`, revision, `acceptance-scripted-ocr`, `script-1`) + the clip's input hash; **each slide is one item from a producer track that holds every observation of its scene** (≥ 3, frames inside the scene, observation total = command calls); confidence 0.9; items lie inside their scene on the shared timeline; scene→text relations are exactly scene#k → its slide; the run is cached under the bound `StageKey`; the analysis equals `core::compose` of the scene run and the cached run.</li><li>Unchanged rerun: both stages `Reused`, the command is not called again, identical analysis. An OCR request change: new identity, only OCR re-runs (calls double), scene ids unchanged.</li><li>Missing ONNX `bundle_root` → OCR `Failed` naming `bundle_root` and the path, coverage `Failed`, no OCR evidence, only the scene run cached; rerun retries OCR, scenes `Reused`. An existing but empty bundle root → OCR `Failed`, scenes complete.</li><li>Scenes not requested → OCR `Failed` naming scenes; command never runs; cache empty.</li><li>Direct `run` without a scene run → `Failed` naming scenes, no command call. Direct `run` with a cancelled token, missing media, missing bundle and no scenes → `Err(Cancelled)`. Pre-cancelled `analyze` → OCR and scenes `Cancelled`, no command call, empty cache.</li></ul> |
+| `ocr_adapter_mapping.rs` | <ul><li>Input: real upstream `analyze_scene_aware_ocr` over fixture frames and a fixture `OcrBackend` (visual-analysis' own two-scene scenario; preconditions: sampled 0,2,4,5,6,8; 2 tracks × 3 samples).</li><li>Receipt: `VisibleText`, every identity field, input hash.</li><li>6 observations with unique ids: text, time = frame/30, frame index, language `en` from the document, confidence 0.75 / 0.5 from the upstream score, region `Region {0,0,2,1}` from the block.</li><li>One `OcrTrack` per upstream track: upstream id, consensus text, role = upstream serde name, `observation_ids` = exactly the members (frames 0,2,4 and 5,6,8), count = `sample_count`.</li><li>Composed through the core: 2 items with 3 observations each.</li><li>Empty output → empty run. A text observation with neither frame nor timestamp → `Failed`.</li></ul> |
+
+`tests/ocr_common/mod.rs` generates the slide clip and writes the scripted command. The
+script reads the first pixel of the frame PNG (the scene background) and prints a fixed
+`OcrDocument` (`RED SLIDE`/`GREEN SLIDE`/`BLUE SLIDE`, confidence 90, language `en`); each
+call appends to a log, which the tests count. Without ffmpeg, ffprobe or python3 the
+execution tests print `SKIPPED …` and return; without a working `drawtext` the clip has
+solid scenes (the script never reads the drawn text). A throwaway probe confirmed the slide
+clip's scenes are [0,5), [5,12), [12,16) s (frames 0/125/300/400), like the #27 clip.
+
+Run: `CARGO_BUILD_JOBS=2 cargo test --locked -p media-intelligence-analysis --features visual-analysis-ocr`.
+At the acceptance commit it compiles. Of the 36 #33 tests, 3 pass already: the
+`ocr_adapter_identity` constants test, and in `stage_order` the generic `None` hand-off and
+the pre-cancelled scene-dependent case, which hold under #27 behaviour. The other adapter
+tests fail at `todo!`, and the other `stage_order` seam tests fail at `todo!`
+(`scene_bound_identity`) or at their assertions, because `execution.rs` still runs the #27
+order and passes `scenes: None`. The 30 #27 tests pass with default features, with
+`audio-analysis` (plus the 31 #32 tests) and with `visual-analysis-ocr`.
+
+## Re-translated #27 contract
+
+Independent re-translation of the #27 stage-order decision ("`Modality` declaration order:
+speech, visible text, scenes") to speech → scenes → visible text, because OCR samples from
+the scene intervals (preflight of #33). Checked every #27 and #32 test:
+
+- **No #27 test asserted that visible text runs before scenes.** The order-dependent tests
+  (`cancellation_during_a_stage_stops_later_stages`, the changed-bytes test in
+  `media_integrity.rs`, `cached_stage_is_not_reused_after_an_earlier_producer_changed_the_media`)
+  depend only on speech running first, which still holds. They are unchanged and pass.
+- `tests/cancellation.rs`: only the comment "Stages run in modality order" was rewritten to
+  name the new order.
+- `tests/speech_adapter_execution.rs`: the one struct literal of `ProducerInput` gained
+  `scenes: None` (mechanical, needed to compile).
+- The new order is pinned positively by `stage_order.rs`
+  (`cancellation_by_the_visible_text_producer_keeps_the_scenes_that_already_ran`,
+  `visible_text_producer_receives_the_scene_run_completed_by_the_same_analysis`).
+- The #27 decision bullet above is marked superseded; the `lib.rs` contract docs name the
+  new order.
+
+## Dependency graph (#33)
+
+- New exact-rev git dependencies at visual-analysis `115c1f0c` (optional, feature
+  `visual-analysis-ocr`): `moenarch-image-analysis-ocr`, `-video-analysis-core`,
+  `-video-analysis-recognition`; the feature also enables `video-analysis-ingest/ocr` and
+  `video-analysis-recognition/ocr`. Dev-dependencies: `moenarch-image-analysis-core` (only
+  for the fixture `OcrBackend`'s `ImageView`) and `num-rational` 0.4.2 (frame rates).
+- `[patch.crates-io]` now also resolves `moenarch-runtime-onnx`, `-semantic-core`,
+  `-math-linear` and `-vector-analysis-core` to Foundation `b0e26e4` (identical versions to
+  the registry requirements). `cargo tree -d` with `audio-analysis,visual-analysis-ocr`
+  shows no duplicate `moenarch-*` crate; third-party duplicates (`sha2`/`digest` family,
+  `getrandom`, now also `miniz_oxide`) come from upstream.
+- `Cargo.lock` records `ort`/`ort-sys` (behind `runtime-onnx`'s `onnxruntime` feature) and
+  `tokenizers`; neither is compiled without `visual-analysis-ocr-onnx`.
+- `image-analysis-ocr` depends on Foundation `model-runtime` (Hugging Face download code).
+  Without `local-onnx`, `OnnxTrOcrBackend::from_local_model` returns a feature error before
+  any resolution; with it, only `auto_download` enables downloads, which the adapter refuses
+  under `LocalOnly`.
+
+## Decisions fixed by these tests (resolved by the acceptance agent)
+
+- **Scene hand-off is a core seam**, not adapter-private: `ProducerInput::scenes` plus
+  `requires_scenes()`. The "no scene run" failure is decided by the core for scene-dependent
+  producers (the producer is not invoked), and by the adapter itself on a direct `run`.
+  Cancellation wins over that failure.
+- **Scene-bound identity (consequential).** A cached OCR result is only valid for the scene
+  intervals it sampled. Rather than add a field to `StageKey` (which would break the
+  #27/#32 key literals), the scene receipt identity is folded into the visible-text
+  `config_hash` of scene-dependent producers, in both the cache key and the receipt. So the
+  OCR receipt `config_hash` differs from `VisualAnalysisOcrConfig::config_hash()`; the
+  latter is the adapter's own `identity().config_hash`. A scene-config change re-runs OCR;
+  an OCR-config change re-runs only OCR.
+- **Identity layout:** `producer` = `visual-analysis:<onnx-trocr|json-command>`;
+  `model` = the ONNX preset's repo id or the JSON command's caller-chosen `name`;
+  `model_version` caller-declared, else `unspecified`.
+- **Config hash** covers JSON name/command/args, ONNX preset/`bundle_root`/`cache_dir`, the
+  whole `OcrRequest` and the backend kind; it excludes the fetch permission, the declared
+  version and the ONNX download settings (`hf_token` must never enter a hash or receipt).
+  Upstream sampling has no options at `115c1f0c`. The exact hash input is not pinned.
+- **Download-capable** = ONNX TrOCR with `auto_download`. A JSON command is the caller's own
+  executable and is never refused (the adapter cannot vet it). A missing or empty model
+  bundle is a run-time `Failed`, never a construction error.
+- **Observation ids** are adapter-assigned, unique within the run; their format is not
+  pinned. Confidence is the upstream observation score (OCR confidence / 100) unchanged;
+  `role` is the upstream `VideoTextRole` serde name.
+- Not pinned: behaviour for a completed scene run with zero scenes; whether the
+  scene-dependent `Failed` status carries an attempted receipt.
+
+## Upstream API gap (blocks a faithful implementation)
+
+At `115c1f0c`, `VideoTextTrack` reports `sample_count`, frame/time bounds and scene indices
+but **not which observations it contains**, and `SceneAwareOcrAnalysis` adds no membership
+either (`analyze_video_text_semantics` groups samples privately in `associate_samples`).
+The core collapses repeated frames only through `OcrTrack::observation_ids`, and
+`ocr_adapter_mapping.rs` / `ocr_adapter_execution.rs` require exact membership. The adapter
+must not reconstruct membership itself (that would be tracking code in this repository).
+Implementation therefore needs a focused visual-analysis change that exposes per-track
+member observations (for example observation indices on `VideoTextTrack` or a track id on
+each output observation) and a revision bump here. If that change adds a field to
+`SceneAwareOcrAnalysis`, the `empty_output_maps_to_an_empty_run` struct literal needs the
+new field (mechanical).
+
+## What #33 acceptance does not prove
+
+- **No OCR model runs.** The JSON backend calls an acceptance script that answers from the
+  frame's background colour; it does not read the drawn text. ONNX TrOCR is only exercised
+  without model files. Real recognition of slide text from a local clip is #34.
+- No network test. "No surprise downloads" is shown by refusal at construction.
+- Cancellation inside a running upstream OCR pass is not tested (upstream offers no
+  cancellation hook); only cancellation before the run is.
+- Upstream sampling density and tracking heuristics are trusted, not re-tested; the tests
+  assert only start/middle/last coverage per scene and the resulting grouping.

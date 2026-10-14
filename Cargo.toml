@@ -21,6 +21,14 @@ moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-founda
 video-analysis-ffmpeg = { package = "moenarch-video-analysis-ffmpeg", git = "https://github.com/moritzbrantner/visual-analysis", rev = "115c1f0caceb644993df3121b4625e674a9f1b7a" }
 video-analysis-ingest = { package = "moenarch-video-analysis-ingest", git = "https://github.com/moritzbrantner/visual-analysis", rev = "115c1f0caceb644993df3121b4625e674a9f1b7a" }
 tempfile = "3.23.0"
+# Visible-text producer (#33): visual-analysis OCR backends, the scene-aware OCR sampling
+# path (video-analysis-ingest feature `ocr`) and text tracking, all at the scene producer's
+# revision. Only `media-intelligence-analysis`'s opt-in `visual-analysis-ocr` feature uses them.
+image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "115c1f0caceb644993df3121b4625e674a9f1b7a" }
+image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "115c1f0caceb644993df3121b4625e674a9f1b7a" }
+video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "115c1f0caceb644993df3121b4625e674a9f1b7a" }
+video-analysis-recognition = { package = "moenarch-video-analysis-recognition", git = "https://github.com/moritzbrantner/visual-analysis", rev = "115c1f0caceb644993df3121b4625e674a9f1b7a" }
+num-rational = "0.4.2"
 # Canonical speech producer (#32): audio-analysis transcription at an exact public revision.
 # Only `media-intelligence-analysis`'s opt-in `audio-analysis` feature uses it. ASR,
 # model resolution and decoding stay inside audio-analysis.
@@ -42,3 +50,7 @@ moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-founda
 moenarch-model-runtime = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
 moenarch-runtime-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
 moenarch-tensor-data = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
+moenarch-runtime-onnx = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
+moenarch-semantic-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
+moenarch-math-linear = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
+moenarch-vector-analysis-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }

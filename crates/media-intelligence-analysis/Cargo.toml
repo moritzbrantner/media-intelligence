@@ -18,6 +18,9 @@ sha2.workspace = true
 video-analysis-ffmpeg.workspace = true
 video-analysis-ingest.workspace = true
 audio-analysis-transcription = { workspace = true, optional = true }
+image-analysis-ocr = { workspace = true, optional = true }
+video-analysis-core = { workspace = true, optional = true }
+video-analysis-recognition = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -27,6 +30,21 @@ default = []
 audio-analysis = ["dep:audio-analysis-transcription"]
 # Real native Candle Whisper inference (heavy compile; not built by default CI or tests).
 audio-analysis-candle = ["audio-analysis", "audio-analysis-transcription/candle"]
+# Opt-in visible-text producer adapter (#33) over visual-analysis scene-aware OCR and text
+# tracking. Without a further runtime feature, the ONNX TrOCR backend compiles but reports
+# that its runtime is missing; the JSON external-command backend works.
+visual-analysis-ocr = [
+    "dep:image-analysis-ocr",
+    "dep:video-analysis-core",
+    "dep:video-analysis-recognition",
+    "video-analysis-ingest/ocr",
+    "video-analysis-recognition/ocr",
+]
+# Real local ONNX TrOCR inference (onnxruntime + tokenizers; not built by default CI or tests).
+visual-analysis-ocr-onnx = ["visual-analysis-ocr", "image-analysis-ocr/local-onnx"]
 
 [dev-dependencies]
 tempfile.workspace = true
+num-rational.workspace = true
+# Only to implement a fixture `OcrBackend` (its `ImageView` argument) in the #33 mapping test.
+image-analysis-core.workspace = true

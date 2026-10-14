@@ -60,7 +60,8 @@ fn cancellation_during_a_stage_stops_later_stages() {
     let Some(clip) = three_scene_clip("cancel_during") else {
         return;
     };
-    // Stages run in modality order; speech cancels the shared token and stops.
+    // Speech runs first (#33 order: speech, scenes, visible text); it cancels the shared
+    // token and stops.
     let speech = FakeSpeech::new(Behaviour::CancelThenStop);
     let ocr = FakeOcr::new(Behaviour::Succeed);
     let token = CancellationToken::new();

@@ -203,6 +203,7 @@ fn cancelled_before_the_run_returns_cancelled_without_calling_audio_analysis() {
         media_path: &media_path,
         input_hash: &hash,
         cancellation: &token,
+        scenes: None,
     });
     assert_eq!(outcome, Err(ProducerError::Cancelled));
 }
