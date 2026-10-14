@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timezone
 import json
+import subprocess
 
 from mi_discovery.source_watcher.models import CheckState, SourceSubscription
 from mi_discovery.source_watcher.providers import RssProvider, ToolFeedProvider
@@ -246,3 +247,50 @@ def test_tool_feed_provider_reports_yt_dlp_failures_as_source_check_errors(monke
             pass
         else:
             raise AssertionError(f"expected SourceCheckError for {failure!r}")
+
+
+def test_channel_id_with_trailing_hyphen_is_recognized() -> None:
+    from mi_discovery.source_watcher.providers import _channel_id_in
+
+    channel_id = "UC" + "a" * 21 + "-"
+    assert _channel_id_in(f"/channel/{channel_id}/videos") == channel_id
+    assert _channel_id_in(f"ERROR: [youtube:tab] {channel_id}: This channel does not have a videos tab") == channel_id
+    assert _channel_id_in("UC" + "a" * 23) is None
+
+
+def test_missing_videos_tab_keeps_the_channel_id_from_multiline_stderr(monkeypatch) -> None:
+    provider = ToolFeedProvider()
+    channel_id = "UC" + "b" * 22
+    calls: list[str] = []
+
+    def fake_run(args, **kwargs):
+        url = args[-1]
+        calls.append(url)
+        if url.endswith("/videos"):
+            raise subprocess.CalledProcessError(
+                1,
+                args,
+                stderr=(
+                    f"ERROR: [youtube:tab] {channel_id}: This channel does not have a videos tab\n"
+                    "Traceback (most recent call last):\n"
+                    "  File \"yt_dlp/YoutubeDL.py\", line 1, in extract_info\n"
+                ),
+            )
+        if "list=UU" in url:
+            return subprocess.CompletedProcess(
+                args, 0, stdout=json.dumps({"entries": [{"id": "newest", "url": "https://www.youtube.com/watch?v=newest"}]})
+            )
+        raise subprocess.CalledProcessError(1, args, stderr="ERROR: unavailable")
+
+    monkeypatch.setattr("mi_discovery.source_watcher.providers.subprocess.run", fake_run)
+    update, _ = provider.check_for_update(
+        SourceSubscription(
+            source_id="topic",
+            source_type="youtube",
+            source_url="https://www.youtube.com/@topic",
+            target_services=["https://consumer.local/hook"],
+        ),
+        CheckState(),
+    )
+    assert update is not None and update["update_id"] == "newest"
+    assert calls[-1] == f"https://www.youtube.com/playlist?list=UU{'b' * 22}"

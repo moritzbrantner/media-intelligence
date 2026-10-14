@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 import email.utils
 import json
+import re
 import subprocess
 from typing import Any
 from urllib.parse import parse_qs, quote_plus, urlparse
@@ -161,7 +162,7 @@ class ToolFeedProvider(SourceProvider):
     def check_for_update(
         self, subscription: SourceSubscription, state: CheckState
     ) -> tuple[dict[str, Any] | None, CheckState]:
-        feed = self._load_feed(_channel_uploads_url(subscription.source_url))
+        feed = self._load_uploads_feed(_channel_uploads_url(subscription.source_url))
         if "entries" not in feed:
             raise ValueError("source_url must resolve to a channel, not a single item")
         entries = feed.get("entries") or []
@@ -202,6 +203,38 @@ class ToolFeedProvider(SourceProvider):
             next_state,
         )
 
+    def _load_uploads_feed(self, uploads_url: str) -> dict[str, Any]:
+        """Load a channel upload tab, falling back to the generated uploads playlist.
+
+        Topic channels and some others have uploads but no Videos tab
+        (yt-dlp/yt-dlp#10804). Their generated ``UU`` uploads playlist lists the
+        uploads newest-first, so it is a valid replacement for ``/videos`` only.
+        """
+        try:
+            return self._load_feed(uploads_url)
+        except _MissingVideosTab as exc:
+            if not uploads_url.endswith("/videos"):
+                raise
+            channel_id = (
+                _channel_id_in(urlparse(uploads_url).path)
+                or _channel_id_in(exc.detail)
+                or self._resolve_channel_id(uploads_url.removesuffix("/videos"))
+            )
+            if channel_id is None:
+                raise SourceCheckError(
+                    "channel has no Videos tab and its channel id could not be determined"
+                ) from exc
+            return self._load_feed(
+                f"https://www.youtube.com/playlist?list=UU{channel_id.removeprefix('UC')}"
+            )
+
+    def _resolve_channel_id(self, channel_url: str) -> str | None:
+        try:
+            metadata = self._load_feed(channel_url)
+        except SourceCheckError:
+            return None
+        return _channel_id_in(str(metadata.get("channel_id") or ""))
+
     def _load_feed(self, source_url: str) -> dict[str, Any]:
         try:
             return self._run_yt_dlp(source_url)
@@ -213,6 +246,8 @@ class ToolFeedProvider(SourceProvider):
             ) from exc
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or "").strip().splitlines()[-1:] or [f"exit status {exc.returncode}"]
+            if NO_VIDEOS_TAB_MESSAGE in (exc.stderr or ""):
+                raise _MissingVideosTab(f"yt-dlp failed: {detail[0]}", exc.stderr or "") from exc
             raise SourceCheckError(f"yt-dlp failed: {detail[0]}") from exc
         except json.JSONDecodeError as exc:
             raise SourceCheckError("yt-dlp returned invalid JSON") from exc
@@ -236,6 +271,23 @@ class ToolFeedProvider(SourceProvider):
             timeout=YT_DLP_TIMEOUT_SECONDS,
         )
         return json.loads(result.stdout)
+
+
+NO_VIDEOS_TAB_MESSAGE = "does not have a videos tab"
+_CHANNEL_ID = re.compile(r"(?<![0-9A-Za-z_-])UC[0-9A-Za-z_-]{22}(?![0-9A-Za-z_-])")
+
+
+class _MissingVideosTab(SourceCheckError):
+    """yt-dlp reported that a channel has no Videos tab."""
+
+    def __init__(self, message: str, detail: str) -> None:
+        super().__init__(message)
+        self.detail = detail
+
+
+def _channel_id_in(text: str) -> str | None:
+    match = _CHANNEL_ID.search(text)
+    return match.group(0) if match else None
 
 
 # `/streams` is excluded: a scheduled future broadcast can stay first in that tab, so its
