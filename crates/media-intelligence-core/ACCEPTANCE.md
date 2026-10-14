@@ -26,6 +26,7 @@ acceptance seam, and its bodies are `todo!("implementation pending (#25)")`.
 | `revisions.rs` | Two OCR model versions with identical ids and content give 4 items, not 2. Each item keeps its own receipt and its own run's scores, and coverage lists both receipts. |
 | `determinism.rs` | <ul><li>Output is byte-identical across repeated runs and after shuffling every input collection.</li><li>Changing the OCR config hash changes only OCR ids and the relations that touch them.</li><li>Changing the speech model version changes only speech ids.</li><li>Ids are bound to the media content hash.</li></ul> |
 | `validation.rs` | Each of these returns an error rather than a panic: <ul><li>end < start;</li><li>a time before the media start;</li><li>NaN or infinite times;</li><li>a track naming an unknown observation;</li><li>a track naming an observation from another run (ids are run-scoped);</li><li>a receipt modality mismatch;</li><li>duplicate ids within a run;</li><li>an untimed timed-text segment.</li></ul> |
+| `canonical_scene_producer.rs` | <ul><li>A real scenedetect-rs run (rev `adfcca6a`, synthetic ffmpeg clip) is committed byte-for-byte, checked by its sha256.</li><li>Composing it reproduces the producer's 3 scenes exactly: seconds, frames, receipt, and completed_with_findings coverage.</li><li>It shares one timeline with the timed-text transcript and gives the expected scene→speech relations.</li></ul> |
 | `compatibility.rs` | <ul><li>The `MediaEvidenceBatchV1` fixture round-trips.</li><li>Conversion keeps scene, observation and track ids and every `ProcessingEvidenceV1` field (`runId` and `processingConfig` included).</li><li>Composition does not inflate OCR frames.</li><li>Empty batch lists become `unprocessed`.</li><li>A Foundation timed-text transcript plus the batch compose into one timeline with the expected co-occurrences.</li></ul> |
 
 Run: `CARGO_BUILD_JOBS=2 cargo test --locked -p media-intelligence-core`.
@@ -48,5 +49,9 @@ Run: `CARGO_BUILD_JOBS=2 cargo test --locked -p media-intelligence-core`.
 
 ## Canonical producer output
 
-None qualifies, so none is included and none was fabricated. See `tests/fixtures/README.md`.
-The only real speech output found is a whisper.cpp transcript in video-analysis-studio. It was not copied because that repo has no license and the transcript reproduces copyrighted third-party speech.
+There is one **actual canonical producer run**: scenedetect-rs `detect-content list-scenes --format json` at rev `adfcca6aa3a0bfdc0d12ecfd8f9f6db3284a28bd`.
+- The **media is synthetic**: an ffmpeg 8.0.1 lavfi clip, sha256 `03e3ba48…7279`.
+- The producer execution is real.
+- Commands, versions and hashes are in `tests/fixtures/README.md` and `tests/fixtures/scenedetect_rs_three_scenes.provenance.json`.
+
+No redistributable recorded output of a producer on real-world footage exists in the owner repositories, so none is included.
