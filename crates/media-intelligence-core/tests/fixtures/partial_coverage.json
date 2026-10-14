@@ -1,0 +1,42 @@
+{
+  "media": {
+    "assetId": "asset:5da7462dc6b2dd37c84ddccafece41d332ea3a985fa6aa8d55d5cd9456005f78",
+    "contentHash": "f3ad981392dbb73326a1911c5a7e4ccdec26527f875ddf120d903515430f8717",
+    "durationSeconds": 95.5
+  },
+  "speech": {
+    "status": "failed",
+    "receipt": {
+      "modality": "speech",
+      "producer": "native-whisperx",
+      "producerVersion": "424f650446fb6e576c02d996a2c575570ed337cb",
+      "model": "whisper-large-v3",
+      "modelVersion": "whisperx-3.8.6",
+      "configHash": "sha256:8caaab1e16e853b403f9baeac38141561337a903df207089c32b08abb031290d",
+      "inputHash": "sha256:77c4a2ee8c08741d26f26f2a3f0ca040c85aa9acace114d05b2bb6794238adb1",
+      "runId": "run-speech-0002"
+    },
+    "reason": "audio decoder error: no audio stream in container"
+  },
+  "visibleText": {
+    "status": "unprocessed"
+  },
+  "scenes": {
+    "status": "completed",
+    "runs": [
+      {
+        "receipt": {
+          "modality": "scene",
+          "producer": "visual-analysis",
+          "producerVersion": "115c1f0caceb644993df3121b4625e674a9f1b7a",
+          "model": "scenedetect-core:content",
+          "modelVersion": "0.1.0",
+          "configHash": "fnv1a64:41d8a0c3b7e29f06",
+          "inputHash": "fnv1a64:0d4a7e19c3b2f581",
+          "runId": "run-scene-0002"
+        },
+        "scenes": []
+      }
+    ]
+  }
+}

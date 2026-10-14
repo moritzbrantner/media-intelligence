@@ -44,3 +44,24 @@ jobs:
 
       - name: Run repository test suite
         run: python -m pytest -q
+
+  rust-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Run the composition example
+        run: cargo run --locked -p media-intelligence-core --example compose -- crates/media-intelligence-core/tests/fixtures/lecture_composition.json > /dev/null

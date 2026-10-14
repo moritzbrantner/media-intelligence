@@ -1,0 +1,42 @@
+{
+  "frame_rate": 25.0,
+  "scene_count": 3,
+  "scenes": [
+    {
+      "scene_number": 1,
+      "start_frame": 1,
+      "start_timecode": "00:00:00.000",
+      "start_seconds": 0.0,
+      "end_frame": 125,
+      "end_timecode": "00:00:05.000",
+      "end_seconds": 5.0,
+      "length_frames": 125,
+      "length_timecode": "00:00:05.000",
+      "length_seconds": 5.0
+    },
+    {
+      "scene_number": 2,
+      "start_frame": 126,
+      "start_timecode": "00:00:05.000",
+      "start_seconds": 5.0,
+      "end_frame": 300,
+      "end_timecode": "00:00:12.000",
+      "end_seconds": 12.0,
+      "length_frames": 175,
+      "length_timecode": "00:00:07.000",
+      "length_seconds": 7.0
+    },
+    {
+      "scene_number": 3,
+      "start_frame": 301,
+      "start_timecode": "00:00:12.000",
+      "start_seconds": 12.0,
+      "end_frame": 400,
+      "end_timecode": "00:00:16.000",
+      "end_seconds": 16.0,
+      "length_frames": 100,
+      "length_timecode": "00:00:04.000",
+      "length_seconds": 4.0
+    }
+  ]
+}

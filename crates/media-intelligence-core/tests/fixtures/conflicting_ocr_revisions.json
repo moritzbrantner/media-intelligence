@@ -1,0 +1,110 @@
+{
+  "media": {
+    "assetId": "asset:8a50cbbf6606a036848b78a2c7fa86a2f9a72cbc03565422676998fe6e4ee76b",
+    "contentHash": "23864118cad73659ca350e19c4331b577372dc0e7a52369315ae98c8dd2b65ac",
+    "durationSeconds": 60.0
+  },
+  "speech": {
+    "status": "not_requested"
+  },
+  "scenes": {
+    "status": "not_requested"
+  },
+  "visibleText": {
+    "status": "completed",
+    "runs": [
+      {
+        "receipt": {
+          "modality": "visible_text",
+          "producer": "visual-analysis",
+          "producerVersion": "115c1f0caceb644993df3121b4625e674a9f1b7a",
+          "model": "trocr-base-printed",
+          "modelVersion": "2024-03-01",
+          "configHash": "fnv1a64:7b03ce5d12a9e4f8",
+          "inputHash": "fnv1a64:5e9f03a1c7d24b68",
+          "runId": "run-ocr-a"
+        },
+        "observations": [
+          {
+            "id": "obs-1",
+            "text": "Keynote 2026",
+            "timestampSeconds": 5.0,
+            "frameIndex": 150,
+            "confidence": 0.91
+          },
+          {
+            "id": "obs-2",
+            "text": "Keynote 2026",
+            "timestampSeconds": 7.0,
+            "frameIndex": 210,
+            "confidence": 0.89
+          },
+          {
+            "id": "obs-3",
+            "text": "Q&A",
+            "timestampSeconds": 40.0,
+            "frameIndex": 1200,
+            "confidence": 0.7
+          }
+        ],
+        "tracks": [
+          {
+            "id": "trk-1",
+            "text": "Keynote 2026",
+            "role": "scene_text",
+            "observationIds": [
+              "obs-1",
+              "obs-2"
+            ]
+          }
+        ]
+      },
+      {
+        "receipt": {
+          "modality": "visible_text",
+          "producer": "visual-analysis",
+          "producerVersion": "115c1f0caceb644993df3121b4625e674a9f1b7a",
+          "model": "trocr-base-printed",
+          "modelVersion": "2025-01-15",
+          "configHash": "fnv1a64:7b03ce5d12a9e4f8",
+          "inputHash": "fnv1a64:5e9f03a1c7d24b68",
+          "runId": "run-ocr-b"
+        },
+        "observations": [
+          {
+            "id": "obs-1",
+            "text": "Keynote 2026",
+            "timestampSeconds": 5.0,
+            "frameIndex": 150,
+            "confidence": 0.97
+          },
+          {
+            "id": "obs-2",
+            "text": "Keynote 2026",
+            "timestampSeconds": 7.0,
+            "frameIndex": 210,
+            "confidence": 0.96
+          },
+          {
+            "id": "obs-3",
+            "text": "Q&A",
+            "timestampSeconds": 40.0,
+            "frameIndex": 1200,
+            "confidence": 0.88
+          }
+        ],
+        "tracks": [
+          {
+            "id": "trk-1",
+            "text": "Keynote 2026",
+            "role": "scene_text",
+            "observationIds": [
+              "obs-1",
+              "obs-2"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

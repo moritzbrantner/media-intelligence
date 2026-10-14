@@ -1,0 +1,26 @@
+{
+  "producerOutput": "scenedetect_rs_three_scenes.scenes.json",
+  "producerOutputSha256": "f2b1a728ed7c114e27751978e8946a09f614d46c4ed408656e2f982270427953",
+  "media": {
+    "description": "Synthetic clip generated with ffmpeg lavfi: solid red 5 s, green 7 s, blue 4 s; 320x240, 25 fps, 400 frames, H.264 yuv420p",
+    "sha256": "03e3ba48bef6b67535d18c24a1c8e7dbfaf0f9fad9b17dcd1918add385ba7279",
+    "byteLength": 14660,
+    "durationSeconds": 16.0,
+    "generator": "ffmpeg version 8.0.1-3ubuntu2",
+    "generatorCommand": "/usr/bin/ffmpeg -hide_banner -loglevel error -y -f lavfi -i color=c=red:s=320x240:r=25:d=5 -f lavfi -i color=c=green:s=320x240:r=25:d=7 -f lavfi -i color=c=blue:s=320x240:r=25:d=4 -filter_complex [0:v][1:v][2:v]concat=n=3:v=1:a=0[v] -map [v] -c:v libx264 -threads 1 -pix_fmt yuv420p -bitexact -fflags +bitexact three-scenes.mp4"
+  },
+  "receipt": {
+    "modality": "scene",
+    "producer": "scenedetect-rs",
+    "producerVersion": "adfcca6aa3a0bfdc0d12ecfd8f9f6db3284a28bd",
+    "model": "detect-content",
+    "modelVersion": "scenedetect-cli 0.1.0",
+    "configHash": "sha256:22ad638c833ba2a4b2babec5b8d7d203fb2b1ec71060eb31f4b07b5087b572ca",
+    "inputHash": "sha256:03e3ba48bef6b67535d18c24a1c8e7dbfaf0f9fad9b17dcd1918add385ba7279",
+    "runId": "scenedetect-rs-run-2026-10-14-three-scenes",
+    "config": {
+      "command": "scenedetect-rs -i three-scenes.mp4 --output out detect-content list-scenes --format json",
+      "configHashInput": "detect-content list-scenes --format json (scenedetect-rs defaults; no detector options)"
+    }
+  }
+}

@@ -12,6 +12,17 @@ Media Intelligence is to become an **embeddable Rust multimodal analysis and ret
 
 **Not decided:** whether generic search should eventually be a separately owned repository, another package or an optional operation mode. Do not create a new search repository or duplicate `nlp-stack` retrieval semantics on the strength of that suggestion alone. A federated/global index is also not part of the initial approved scope.
 
+### Rust core: `crates/media-intelligence-core`
+
+The first slice of the target library composes caller-supplied, already-recorded speech (Foundation `TimedTextContract` or plain segments), scene and OCR producer runs for one caller-owned media object into one deterministic, provenance-bearing timeline (`compose`). It reports per-modality coverage (not requested, unprocessed, failed, completed-empty, completed-with-findings), keeps every producer receipt and modality-specific confidence, collapses repeated OCR frames only through producer-supplied tracks, and derives scene/speech/visible-text overlap relations. It needs no Python, database, network or model runtime; `compat::youtube_corpus` accepts YouTube Corpus `MediaEvidenceBatchV1` exports.
+
+```bash
+cargo test --locked -p media-intelligence-core
+cargo run --locked -p media-intelligence-core --example compose -- crates/media-intelligence-core/tests/fixtures/lecture_composition.json
+```
+
+Running real producers on a video is [#27](https://github.com/moritzbrantner/media-intelligence/issues/27); retrieval fusion over corpus-owned indexes is [#26](https://github.com/moritzbrantner/media-intelligence/issues/26). The Python transcription, OCR, enrichment and search services stay as compatibility-only legacy surfaces; they are retired under [#16](https://github.com/moritzbrantner/media-intelligence/issues/16) only after YouTube Corpus, Document Search and Media Similarity each pass independent acceptance on the Rust core.
+
 **Status:** the Python services, contracts and operational instructions below describe existing/legacy implementation surfaces, not proof that this target architecture is implemented. The recorded bounded-context split in [ADR 0001](docs/decisions/0001-bounded-context-monorepo.md) remains historical context for those services; its Python/microservice structure is not the new design authority. Implementation work and acceptance are tracked in GitHub issues.
 
 ---

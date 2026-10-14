@@ -1,0 +1,288 @@
+{
+  "media": {
+    "assetId": "asset:1e70cb79ea511a7705d4d7c1266d12ab0e0c9a9a095c2bc50720eda169283c2c",
+    "contentHash": "7da974e439f6849a9f046394012394aabd520658f9593c1b4e08b440b146a0d6",
+    "durationSeconds": 30.0
+  },
+  "speech": {
+    "status": "completed",
+    "runs": [
+      {
+        "receipt": {
+          "modality": "speech",
+          "producer": "native-whisperx",
+          "producerVersion": "424f650446fb6e576c02d996a2c575570ed337cb",
+          "model": "whisper-large-v3",
+          "modelVersion": "whisperx-3.8.6",
+          "configHash": "sha256:a440ae85bf87af1512291b6ef435d4ecc5bdbe72234c3e130c2a6e4fedfef537",
+          "inputHash": "sha256:75daa812e468b9c2bb992d91dab0451478e8a8d7b92996a70c461c3daab12a80",
+          "runId": "run-speech-0001",
+          "config": {
+            "beamSize": 5,
+            "language": "en"
+          }
+        },
+        "segments": [
+          {
+            "index": 0,
+            "startSeconds": 0.0,
+            "endSeconds": 3.0,
+            "text": "Welcome to the lecture on ownership.",
+            "language": "en",
+            "speaker": "SPEAKER_00",
+            "confidence": 0.91
+          },
+          {
+            "index": 1,
+            "startSeconds": 3.0,
+            "endSeconds": 9.5,
+            "text": "Ownership means each value has exactly one owner.",
+            "language": "en",
+            "speaker": "SPEAKER_00",
+            "confidence": 0.88
+          },
+          {
+            "index": 2,
+            "startSeconds": 10.0,
+            "endSeconds": 12.0,
+            "text": "Let's look at main.",
+            "language": "en",
+            "speaker": "SPEAKER_00",
+            "confidence": 0.42
+          },
+          {
+            "index": 3,
+            "startSeconds": 12.0,
+            "endSeconds": 16.0,
+            "text": "Here the string moves into the function.",
+            "language": "en",
+            "speaker": "SPEAKER_00",
+            "confidence": 0.86
+          },
+          {
+            "index": 4,
+            "startSeconds": 16.0,
+            "endSeconds": 18.0,
+            "text": "So who owns it now?",
+            "language": "en",
+            "speaker": "SPEAKER_00",
+            "confidence": 0.79
+          },
+          {
+            "index": 5,
+            "startSeconds": 19.0,
+            "endSeconds": 26.0,
+            "text": "The borrowing rules answer that question.",
+            "language": "en",
+            "speaker": "SPEAKER_00",
+            "confidence": 0.9
+          }
+        ]
+      }
+    ]
+  },
+  "visibleText": {
+    "status": "completed",
+    "runs": [
+      {
+        "receipt": {
+          "modality": "visible_text",
+          "producer": "visual-analysis",
+          "producerVersion": "115c1f0caceb644993df3121b4625e674a9f1b7a",
+          "model": "trocr-base-printed",
+          "modelVersion": "2024-03-01",
+          "configHash": "fnv1a64:7b03ce5d12a9e4f8",
+          "inputHash": "fnv1a64:9c2e41d07a3be815",
+          "runId": "run-ocr-0001",
+          "config": {
+            "sampleEverySeconds": 2.0
+          }
+        },
+        "observations": [
+          {
+            "id": "ocr-title-1",
+            "text": "Rust Ownership",
+            "timestampSeconds": 2.0,
+            "frameIndex": 60,
+            "language": "en",
+            "region": {
+              "x": 96,
+              "y": 48,
+              "width": 512,
+              "height": 64
+            },
+            "confidence": 0.97
+          },
+          {
+            "id": "ocr-title-2",
+            "text": "Rust Ownership",
+            "timestampSeconds": 4.0,
+            "frameIndex": 120,
+            "language": "en",
+            "region": {
+              "x": 96,
+              "y": 48,
+              "width": 512,
+              "height": 64
+            },
+            "confidence": 0.95
+          },
+          {
+            "id": "ocr-title-3",
+            "text": "Rust Ownership",
+            "timestampSeconds": 6.0,
+            "frameIndex": 180,
+            "language": "en",
+            "region": {
+              "x": 96,
+              "y": 48,
+              "width": 512,
+              "height": 64
+            },
+            "confidence": 0.96
+          },
+          {
+            "id": "ocr-title-4",
+            "text": "Rust Ownership",
+            "timestampSeconds": 8.0,
+            "frameIndex": 240,
+            "language": "en",
+            "region": {
+              "x": 96,
+              "y": 48,
+              "width": 512,
+              "height": 64
+            },
+            "confidence": 0.98
+          },
+          {
+            "id": "ocr-main-1",
+            "text": "fn main()",
+            "timestampSeconds": 12.0,
+            "frameIndex": 360,
+            "language": "en",
+            "region": {
+              "x": 120,
+              "y": 400,
+              "width": 220,
+              "height": 40
+            },
+            "confidence": 0.81
+          },
+          {
+            "id": "ocr-slide-1",
+            "text": "Borrowing rules",
+            "timestampSeconds": 18.0,
+            "frameIndex": 540,
+            "language": "en",
+            "region": {
+              "x": 96,
+              "y": 48,
+              "width": 512,
+              "height": 64
+            },
+            "confidence": 0.93
+          },
+          {
+            "id": "ocr-slide-2",
+            "text": "Borrowing rules",
+            "timestampSeconds": 22.0,
+            "frameIndex": 660,
+            "language": "en",
+            "region": {
+              "x": 96,
+              "y": 48,
+              "width": 512,
+              "height": 64
+            },
+            "confidence": 0.94
+          },
+          {
+            "id": "ocr-main-2",
+            "text": "fn main()",
+            "timestampSeconds": 25.0,
+            "frameIndex": 750,
+            "language": "en",
+            "region": {
+              "x": 120,
+              "y": 400,
+              "width": 220,
+              "height": 40
+            },
+            "confidence": 0.79
+          }
+        ],
+        "tracks": [
+          {
+            "id": "trk-title",
+            "text": "Rust Ownership",
+            "role": "presentation_slide",
+            "observationIds": [
+              "ocr-title-1",
+              "ocr-title-2",
+              "ocr-title-3",
+              "ocr-title-4"
+            ]
+          },
+          {
+            "id": "trk-slide",
+            "text": "Borrowing rules",
+            "role": "presentation_slide",
+            "observationIds": [
+              "ocr-slide-1",
+              "ocr-slide-2"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": {
+    "status": "completed",
+    "runs": [
+      {
+        "receipt": {
+          "modality": "scene",
+          "producer": "visual-analysis",
+          "producerVersion": "115c1f0caceb644993df3121b4625e674a9f1b7a",
+          "model": "scenedetect-core:content",
+          "modelVersion": "0.1.0",
+          "configHash": "fnv1a64:41d8a0c3b7e29f06",
+          "inputHash": "fnv1a64:9c2e41d07a3be815",
+          "runId": "run-scene-0001",
+          "config": {
+            "detector": "content",
+            "threshold": 27.0,
+            "minSceneLen": 15
+          }
+        },
+        "scenes": [
+          {
+            "id": "sc-0",
+            "index": 0,
+            "startSeconds": 0.0,
+            "endSeconds": 10.0,
+            "startFrame": 0,
+            "endFrame": 300
+          },
+          {
+            "id": "sc-1",
+            "index": 1,
+            "startSeconds": 10.0,
+            "endSeconds": 20.0,
+            "startFrame": 300,
+            "endFrame": 600
+          },
+          {
+            "id": "sc-2",
+            "index": 2,
+            "startSeconds": 20.0,
+            "endSeconds": 30.0,
+            "startFrame": 600,
+            "endFrame": 900
+          }
+        ]
+      }
+    ]
+  }
+}

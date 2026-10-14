@@ -1,0 +1,243 @@
+{
+  "schema": "media_evidence",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "youtube-corpus",
+    "revision": "0eb1c969a6b857183b5383af8d7c6e1e473263f1"
+  },
+  "video": {
+    "id": "7d0b6c2e-4f1a-4c3e-9a51-2b8f6d0e7c14",
+    "youtubeId": "Xq3pL9vT2aE",
+    "sourceUrl": "https://www.youtube.com/watch?v=Xq3pL9vT2aE",
+    "title": "SQLite internals in 24 seconds"
+  },
+  "revision": "sha256:0416c8d88073e3fc84c48988a7966ac6c1966a5dd1a8d00e13b7b158bb89faf4",
+  "scenes": [
+    {
+      "id": "3e9a1c7f-0b2d-4e58-9f61-7a4c2d8e0b13",
+      "sceneIndex": 0,
+      "startFrame": 0,
+      "endFrame": 375,
+      "startSeconds": 0.0,
+      "endSeconds": 12.5,
+      "metadata": {
+        "detector": "content",
+        "threshold": 27.0,
+        "minSceneLen": 15
+      },
+      "provenance": {
+        "runId": "0f6c9a52-31d7-4b8e-a0c4-6e2d9b17f385",
+        "processor": "visual-analysis",
+        "processorVersion": "8852f257de6ddc4580698ad00d4c9a9ab8461b70",
+        "model": "scenedetect-core:content",
+        "modelVersion": "0.1.0",
+        "inputHash": "fnv1a64:c4e1b7a09d2f3e58",
+        "configHash": "fnv1a64:41d8a0c3b7e29f06",
+        "processingConfig": {
+          "adapter": "video-analysis-ingest.detect_content_scenes",
+          "threshold": 27.0,
+          "minSceneLen": 15,
+          "visualAnalysisRevision": "8852f257de6ddc4580698ad00d4c9a9ab8461b70"
+        }
+      }
+    },
+    {
+      "id": "a17c4e02-6d9b-4f3a-8e25-c0b91f7d4a68",
+      "sceneIndex": 1,
+      "startFrame": 375,
+      "endFrame": 720,
+      "startSeconds": 12.5,
+      "endSeconds": 24.0,
+      "metadata": {
+        "detector": "content",
+        "threshold": 27.0,
+        "minSceneLen": 15
+      },
+      "provenance": {
+        "runId": "0f6c9a52-31d7-4b8e-a0c4-6e2d9b17f385",
+        "processor": "visual-analysis",
+        "processorVersion": "8852f257de6ddc4580698ad00d4c9a9ab8461b70",
+        "model": "scenedetect-core:content",
+        "modelVersion": "0.1.0",
+        "inputHash": "fnv1a64:c4e1b7a09d2f3e58",
+        "configHash": "fnv1a64:41d8a0c3b7e29f06",
+        "processingConfig": {
+          "adapter": "video-analysis-ingest.detect_content_scenes",
+          "threshold": 27.0,
+          "minSceneLen": 15,
+          "visualAnalysisRevision": "8852f257de6ddc4580698ad00d4c9a9ab8461b70"
+        }
+      }
+    }
+  ],
+  "ocrObservations": [
+    {
+      "id": "c2d4e6f8-1a3b-4c5d-8e7f-90a1b2c3d4e5",
+      "text": "SQLite internals",
+      "language": "en",
+      "frameIndex": 30,
+      "timestampSeconds": 1.0,
+      "sceneIndex": 0,
+      "region": {
+        "x": 64,
+        "y": 32,
+        "width": 480,
+        "height": 72
+      },
+      "confidence": 0.96,
+      "attributes": {
+        "engine": "trocr"
+      },
+      "provenance": {
+        "runId": "5b2e8f14-9c03-4d6a-b7e1-a8f0c3d29e47",
+        "processor": "visual-analysis",
+        "processorVersion": "8852f257de6ddc4580698ad00d4c9a9ab8461b70",
+        "model": "trocr",
+        "modelVersion": "microsoft/trocr-base-printed",
+        "inputHash": "fnv1a64:c4e1b7a09d2f3e58",
+        "configHash": "fnv1a64:2a7f90e3d1c64b85",
+        "processingConfig": {
+          "sampleEverySeconds": 1.0,
+          "minConfidence": 0.5
+        }
+      }
+    },
+    {
+      "id": "d3e5f7a9-2b4c-4d6e-9f80-a1b2c3d4e5f6",
+      "text": "SQLite internals",
+      "language": "en",
+      "frameIndex": 60,
+      "timestampSeconds": 2.0,
+      "sceneIndex": 0,
+      "region": {
+        "x": 64,
+        "y": 32,
+        "width": 480,
+        "height": 72
+      },
+      "confidence": 0.97,
+      "attributes": {
+        "engine": "trocr"
+      },
+      "provenance": {
+        "runId": "5b2e8f14-9c03-4d6a-b7e1-a8f0c3d29e47",
+        "processor": "visual-analysis",
+        "processorVersion": "8852f257de6ddc4580698ad00d4c9a9ab8461b70",
+        "model": "trocr",
+        "modelVersion": "microsoft/trocr-base-printed",
+        "inputHash": "fnv1a64:c4e1b7a09d2f3e58",
+        "configHash": "fnv1a64:2a7f90e3d1c64b85",
+        "processingConfig": {
+          "sampleEverySeconds": 1.0,
+          "minConfidence": 0.5
+        }
+      }
+    },
+    {
+      "id": "e4f6a8b0-3c5d-4e7f-a091-b2c3d4e5f607",
+      "text": "SQLite internals",
+      "language": "en",
+      "frameIndex": 90,
+      "timestampSeconds": 3.0,
+      "sceneIndex": 0,
+      "region": {
+        "x": 64,
+        "y": 32,
+        "width": 480,
+        "height": 72
+      },
+      "confidence": 0.95,
+      "attributes": {
+        "engine": "trocr"
+      },
+      "provenance": {
+        "runId": "5b2e8f14-9c03-4d6a-b7e1-a8f0c3d29e47",
+        "processor": "visual-analysis",
+        "processorVersion": "8852f257de6ddc4580698ad00d4c9a9ab8461b70",
+        "model": "trocr",
+        "modelVersion": "microsoft/trocr-base-printed",
+        "inputHash": "fnv1a64:c4e1b7a09d2f3e58",
+        "configHash": "fnv1a64:2a7f90e3d1c64b85",
+        "processingConfig": {
+          "sampleEverySeconds": 1.0,
+          "minConfidence": 0.5
+        }
+      }
+    },
+    {
+      "id": "f5a7b9c1-4d6e-4f80-b1a2-c3d4e5f60718",
+      "text": "github.com/sqlite/sqlite",
+      "language": "en",
+      "frameIndex": 420,
+      "timestampSeconds": 14.0,
+      "sceneIndex": 1,
+      "region": {
+        "x": 64,
+        "y": 32,
+        "width": 480,
+        "height": 72
+      },
+      "confidence": 0.83,
+      "attributes": {
+        "engine": "trocr"
+      },
+      "provenance": {
+        "runId": "5b2e8f14-9c03-4d6a-b7e1-a8f0c3d29e47",
+        "processor": "visual-analysis",
+        "processorVersion": "8852f257de6ddc4580698ad00d4c9a9ab8461b70",
+        "model": "trocr",
+        "modelVersion": "microsoft/trocr-base-printed",
+        "inputHash": "fnv1a64:c4e1b7a09d2f3e58",
+        "configHash": "fnv1a64:2a7f90e3d1c64b85",
+        "processingConfig": {
+          "sampleEverySeconds": 1.0,
+          "minConfidence": 0.5
+        }
+      }
+    }
+  ],
+  "ocrTracks": [
+    {
+      "id": "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+      "text": "SQLite internals",
+      "role": "presentation_slide",
+      "language": "en",
+      "sampleCount": 3,
+      "startFrame": 30,
+      "endFrame": 90,
+      "startSeconds": 1.0,
+      "endSeconds": 3.0,
+      "region": {
+        "x": 64,
+        "y": 32,
+        "width": 480,
+        "height": 72
+      },
+      "metadata": {
+        "classifierVersion": "2"
+      },
+      "observationIds": [
+        "c2d4e6f8-1a3b-4c5d-8e7f-90a1b2c3d4e5",
+        "d3e5f7a9-2b4c-4d6e-9f80-a1b2c3d4e5f6",
+        "e4f6a8b0-3c5d-4e7f-a091-b2c3d4e5f607"
+      ],
+      "sceneIds": [
+        "3e9a1c7f-0b2d-4e58-9f61-7a4c2d8e0b13"
+      ],
+      "provenance": {
+        "runId": "5b2e8f14-9c03-4d6a-b7e1-a8f0c3d29e47",
+        "processor": "visual-analysis",
+        "processorVersion": "8852f257de6ddc4580698ad00d4c9a9ab8461b70",
+        "model": "trocr",
+        "modelVersion": "microsoft/trocr-base-printed",
+        "inputHash": "fnv1a64:c4e1b7a09d2f3e58",
+        "configHash": "fnv1a64:2a7f90e3d1c64b85",
+        "processingConfig": {
+          "sampleEverySeconds": 1.0,
+          "minConfidence": 0.5
+        }
+      }
+    }
+  ],
+  "sponsorblock": null
+}
