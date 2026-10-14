@@ -64,6 +64,7 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Test
+        shell: bash
         run: cargo test --locked 2>&1 | tee test.log
 
       - name: Require real scene-producer execution
