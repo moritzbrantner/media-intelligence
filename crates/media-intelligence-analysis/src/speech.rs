@@ -43,6 +43,7 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 /// The pinned audio-analysis transcription crate, so callers build provider options with
 /// exactly the types this adapter accepts.
@@ -53,7 +54,10 @@ pub use audio_analysis_transcription::{
     WhisperCppProviderOptions, WhisperXCommandOptions,
 };
 
-use crate::{ProducerError, ProducerIdentity, ProducerInput, SpeechProducer, SpeechRun};
+use crate::{
+    execution::sha256_prefixed, Modality, ProducerError, ProducerIdentity, ProducerInput,
+    ProducerReceipt, SpeechProducer, SpeechRun,
+};
 
 /// Exact `audio-analysis` revision whose transcription surface this adapter invokes.
 pub const AUDIO_ANALYSIS_REVISION: &str = "cc8075f633a4bda5d1b9902b3f4c4d07eca017d9";
@@ -91,14 +95,109 @@ impl AudioAnalysisSpeechConfig {
     /// `provider` with default VAD, alignment (disabled) and diarization (disabled)
     /// options, no declared model version and [`ModelFetchPolicy::LocalOnly`].
     pub fn new(provider: TranscriptionProviderSelection) -> Self {
-        let _ = provider;
-        todo!("implementation pending (#32)")
+        Self {
+            provider,
+            vad: VadOptions::default(),
+            alignment: AlignmentOptions::default(),
+            diarization: DiarizationOptions::default(),
+            model_version: None,
+            model_fetch: ModelFetchPolicy::LocalOnly,
+        }
     }
 
     /// Deterministic `sha256:<64 hex>` of the effective transcription options (see the
     /// module documentation for what it covers).
     pub fn config_hash(&self) -> String {
-        todo!("implementation pending (#32)")
+        // serde_json writes struct fields in declaration order, so equal options always
+        // serialize identically.
+        let material = json!({
+            "provider": &self.provider,
+            "vad": &self.vad,
+            "alignment": &self.alignment,
+            "diarization": &self.diarization,
+        });
+        sha256_prefixed(
+            serde_json::to_string(&material)
+                .expect("transcription options serialize")
+                .as_bytes(),
+        )
+    }
+
+    /// The download-capable option, if any (see the module documentation).
+    fn download_capable_option(&self) -> Option<String> {
+        match &self.provider {
+            TranscriptionProviderSelection::CandleWhisper(options)
+                if options.model_bundle.is_none() && !options.model_cache_only =>
+            {
+                return Some(
+                    "Candle Whisper without `model_bundle` or `model_cache_only` may download \
+                     the model; supply a local `model_bundle` or set `model_cache_only` with a \
+                     populated `model_dir`"
+                        .to_string(),
+                );
+            }
+            TranscriptionProviderSelection::ExternalWhisperX(options)
+                if !options.model_cache_only =>
+            {
+                return Some(
+                    "external WhisperX without `model_cache_only` may download models; set \
+                     `model_cache_only` with a populated `model_dir`"
+                        .to_string(),
+                );
+            }
+            _ => {}
+        }
+        if self.alignment.enabled
+            && self.alignment.model_bundle.is_none()
+            && !self.alignment.model_cache_only
+        {
+            return Some(
+                "forced alignment without `model_bundle` or `model_cache_only` may download the \
+                 alignment model; supply a local `model_bundle` or set `model_cache_only` with a \
+                 populated `model_dir`"
+                    .to_string(),
+            );
+        }
+        None
+    }
+
+    /// The first explicitly configured local model location that does not exist (or a
+    /// required one that is not configured), as an actionable reason.
+    fn missing_model_location(&self) -> Option<String> {
+        let mut locations: Vec<(&str, Option<&Path>)> = Vec::new();
+        match &self.provider {
+            TranscriptionProviderSelection::CandleWhisper(options) => {
+                locations.push(("candle model_bundle", options.model_bundle.as_deref()));
+                locations.push(("candle model_dir", options.model_dir.as_deref()));
+            }
+            TranscriptionProviderSelection::WhisperCpp(options) => {
+                let Some(path) = options.model_path.as_deref() else {
+                    return Some(
+                        "whisper.cpp `model_path` is required but not configured".to_string(),
+                    );
+                };
+                locations.push(("whisper.cpp model_path", Some(path)));
+            }
+            TranscriptionProviderSelection::ExternalWhisperX(options) => {
+                locations.push(("whisperx model_dir", options.model_dir.as_deref()));
+            }
+        }
+        if self.alignment.enabled {
+            locations.push((
+                "alignment model_bundle",
+                self.alignment.model_bundle.as_deref(),
+            ));
+            locations.push(("alignment model_dir", self.alignment.model_dir.as_deref()));
+        }
+        locations.into_iter().find_map(|(option, path)| {
+            let path = path?;
+            (!path.exists()).then(|| {
+                format!(
+                    "configured {option} `{}` does not exist; provide the model locally",
+                    path.display()
+                )
+            })
+        })
     }
 }
 
@@ -131,8 +230,12 @@ impl AudioAnalysisSpeechProducer {
     /// `config.model_fetch` is [`ModelFetchPolicy::AllowNetwork`]. Does not touch the file
     /// system or the network.
     pub fn new(config: AudioAnalysisSpeechConfig) -> Result<Self, SpeechAdapterError> {
-        let _ = config;
-        todo!("implementation pending (#32)")
+        if config.model_fetch == ModelFetchPolicy::LocalOnly {
+            if let Some(reason) = config.download_capable_option() {
+                return Err(SpeechAdapterError::ModelFetchNotAllowed { reason });
+            }
+        }
+        Ok(Self { config })
     }
 
     pub fn config(&self) -> &AudioAnalysisSpeechConfig {
@@ -143,19 +246,48 @@ impl AudioAnalysisSpeechProducer {
     /// `media_path`: source `TranscriptionSource::Path { media_path }`, and the configured
     /// provider, VAD, alignment and diarization options.
     pub fn transcription_request(&self, media_path: &Path) -> TranscriptionPipelineRequest {
-        let _ = media_path;
-        todo!("implementation pending (#32)")
+        TranscriptionPipelineRequest {
+            source: TranscriptionSource::Path {
+                path: media_path.to_path_buf(),
+            },
+            provider: self.config.provider.clone(),
+            vad: self.config.vad.clone(),
+            alignment: self.config.alignment.clone(),
+            diarization: self.config.diarization.clone(),
+            output: Default::default(),
+        }
     }
 }
 
 impl SpeechProducer for AudioAnalysisSpeechProducer {
     fn identity(&self) -> ProducerIdentity {
-        todo!("implementation pending (#32)")
+        let provider = &self.config.provider;
+        ProducerIdentity {
+            producer: format!("{SPEECH_PRODUCER_PREFIX}:{}", provider.provider_id()),
+            producer_version: AUDIO_ANALYSIS_REVISION.to_string(),
+            model: provider.model_id().to_string(),
+            model_version: self
+                .config
+                .model_version
+                .clone()
+                .unwrap_or_else(|| UNSPECIFIED_MODEL_VERSION.to_string()),
+            config_hash: self.config.config_hash(),
+        }
     }
 
     fn run(&self, input: &ProducerInput<'_>) -> Result<SpeechRun, ProducerError> {
-        let _ = input;
-        todo!("implementation pending (#32)")
+        if input.cancellation.is_cancelled() {
+            return Err(ProducerError::Cancelled);
+        }
+        if let Some(reason) = self.config.missing_model_location() {
+            return Err(ProducerError::Failed { reason });
+        }
+        let response =
+            audio_analysis_transcription::transcribe(self.transcription_request(input.media_path))
+                .map_err(|error| ProducerError::Failed {
+                    reason: format!("audio-analysis transcription failed: {error}"),
+                })?;
+        speech_run_from_response(&self.identity(), input.input_hash, &response)
     }
 }
 
@@ -172,6 +304,40 @@ pub fn speech_run_from_response(
     input_hash: &str,
     response: &TranscriptionPipelineResponse,
 ) -> Result<SpeechRun, ProducerError> {
-    let _ = (identity, input_hash, response);
-    todo!("implementation pending (#32)")
+    let failed = |reason: String| ProducerError::Failed { reason };
+    if !response.accepted {
+        return Err(failed(format!(
+            "audio-analysis did not accept the transcription: {}",
+            response.diagnostics.join("; ")
+        )));
+    }
+    let producer = format!("{SPEECH_PRODUCER_PREFIX}:{}", response.provider);
+    if producer != identity.producer {
+        return Err(failed(format!(
+            "audio-analysis answered with provider `{}`, expected `{}`",
+            producer, identity.producer
+        )));
+    }
+    if response.model_id != identity.model {
+        return Err(failed(format!(
+            "audio-analysis answered with model `{}`, expected `{}`",
+            response.model_id, identity.model
+        )));
+    }
+    let receipt = ProducerReceipt {
+        modality: Modality::Speech,
+        producer: identity.producer.clone(),
+        producer_version: identity.producer_version.clone(),
+        model: identity.model.clone(),
+        model_version: identity.model_version.clone(),
+        config_hash: identity.config_hash.clone(),
+        input_hash: input_hash.to_string(),
+        run_id: None,
+        config: None,
+    };
+    SpeechRun::from_timed_text(receipt, &response.transcript).map_err(|error| {
+        failed(format!(
+            "transcript cannot be placed on the timeline: {error}"
+        ))
+    })
 }
