@@ -84,9 +84,36 @@ fn whisperx_without_cache_only_is_refused_unless_allowed() {
     allowed(config);
     AudioAnalysisSpeechProducer::new(whisperx(WhisperXCommandOptions {
         model_cache_only: true,
+        no_align: true,
+        diarize: false,
         ..WhisperXCommandOptions::default()
     }))
-    .expect("cache-only WhisperX is local");
+    .expect("cache-only WhisperX without alignment or diarization is local");
+}
+
+#[test]
+fn cache_only_whisperx_with_alignment_or_diarization_is_refused_unless_allowed() {
+    // Upstream WhisperX ignores `model_cache_only` for torchaudio alignment bundles
+    // (`bundle.get_model` in whisperx/alignment.py `load_align_model`, the default for
+    // English) and for the pyannote `DiarizationPipeline` (whisperx/transcribe.py), so
+    // `model_cache_only` alone does not keep these stages off the network.
+    let aligned = whisperx(WhisperXCommandOptions {
+        model_cache_only: true,
+        no_align: false,
+        diarize: false,
+        ..WhisperXCommandOptions::default()
+    });
+    refusal(aligned.clone());
+    allowed(aligned);
+
+    let diarized = whisperx(WhisperXCommandOptions {
+        model_cache_only: true,
+        no_align: true,
+        diarize: true,
+        ..WhisperXCommandOptions::default()
+    });
+    refusal(diarized.clone());
+    allowed(diarized);
 }
 
 #[test]
