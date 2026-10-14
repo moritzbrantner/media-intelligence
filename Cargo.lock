@@ -1406,7 +1406,7 @@ source = "git+https://github.com/moritzbrantner/audio-analysis?rev=cc8075f633a4b
 dependencies = [
  "moenarch-audio-contracts",
  "moenarch-math-signal-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-tensor-data",
  "rustfft",
  "serde",
@@ -1421,7 +1421,7 @@ dependencies = [
  "hound",
  "moenarch-audio-analysis-core",
  "moenarch-audio-contracts",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde_json",
  "thiserror 2.0.21",
 ]
@@ -1435,7 +1435,7 @@ dependencies = [
  "moenarch-audio-contracts",
  "moenarch-media-core",
  "moenarch-model-runtime",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde",
  "serde_json",
 ]
@@ -1448,7 +1448,8 @@ dependencies = [
  "moenarch-audio-analysis-core",
  "moenarch-audio-analysis-recognition",
  "moenarch-audio-contracts",
- "moenarch-runtime-core",
+ "moenarch-model-runtime",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde",
  "serde_json",
 ]
@@ -1468,7 +1469,8 @@ dependencies = [
  "moenarch-audio-analysis-io",
  "moenarch-audio-analysis-speakers",
  "moenarch-media-core",
- "moenarch-runtime-core",
+ "moenarch-model-runtime",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "rayon",
  "rustfft",
  "serde",
@@ -1499,7 +1501,7 @@ name = "moenarch-image-analysis-core"
 version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=f73969447916e5ac47f4559fc51ab47552f4f734#f73969447916e5ac47f4559fc51ab47552f4f734"
 dependencies = [
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-tensor-data",
  "moenarch-video-analysis-core",
  "serde",
@@ -1513,7 +1515,7 @@ source = "git+https://github.com/moritzbrantner/visual-analysis?rev=f73969447916
 dependencies = [
  "image",
  "moenarch-image-analysis-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-video-analysis-core",
  "serde",
  "serde_json",
@@ -1528,7 +1530,7 @@ dependencies = [
  "moenarch-image-analysis-io",
  "moenarch-image-analysis-processing",
  "moenarch-model-runtime",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-runtime-onnx",
  "moenarch-text-core",
  "moenarch-video-analysis-core",
@@ -1547,7 +1549,7 @@ dependencies = [
  "moenarch-image-analysis-core",
  "moenarch-math-geometry-2d",
  "moenarch-math-linear",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-video-analysis-core",
  "serde",
  "serde_json",
@@ -1560,7 +1562,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b197d9c2b606635898dc59bf6b3c9081ee728c4180e0c5cebfaac408f46aa865"
 dependencies = [
  "chrono",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "moenarch-jobs-core"
+version = "0.1.2"
+source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=fb51ab465ecd4d8086ac37ad0a9a2268b570e09f#fb51ab465ecd4d8086ac37ad0a9a2268b570e09f"
+dependencies = [
+ "chrono",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=fb51ab465ecd4d8086ac37ad0a9a2268b570e09f)",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -1572,7 +1586,7 @@ version = "0.1.1"
 source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9#b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9"
 dependencies = [
  "moenarch-media-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde",
  "serde_json",
 ]
@@ -1584,7 +1598,7 @@ source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e
 dependencies = [
  "moenarch-media-core",
  "moenarch-numbers-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-tensor-data",
  "moenarch-vector-analysis-core",
  "serde",
@@ -1598,7 +1612,7 @@ source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e
 dependencies = [
  "moenarch-media-core",
  "moenarch-numbers-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde",
  "serde_json",
 ]
@@ -1614,10 +1628,12 @@ dependencies = [
 [[package]]
 name = "moenarch-model-runtime"
 version = "0.1.1"
-source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9#b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9"
+source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=fb51ab465ecd4d8086ac37ad0a9a2268b570e09f#fb51ab465ecd4d8086ac37ad0a9a2268b570e09f"
 dependencies = [
+ "chrono",
  "hf-hub",
- "moenarch-runtime-core",
+ "moenarch-jobs-core 0.1.2 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=fb51ab465ecd4d8086ac37ad0a9a2268b570e09f)",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=fb51ab465ecd4d8086ac37ad0a9a2268b570e09f)",
  "serde",
  "serde_json",
 ]
@@ -1628,7 +1644,7 @@ version = "0.1.1"
 source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9#b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9"
 dependencies = [
  "moenarch-media-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -1639,6 +1655,15 @@ dependencies = [
 name = "moenarch-runtime-core"
 version = "0.2.1"
 source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9#b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "moenarch-runtime-core"
+version = "0.2.1"
+source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=fb51ab465ecd4d8086ac37ad0a9a2268b570e09f#fb51ab465ecd4d8086ac37ad0a9a2268b570e09f"
 dependencies = [
  "serde",
  "serde_json",
@@ -1670,7 +1695,7 @@ version = "0.1.1"
 source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9#b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9"
 dependencies = [
  "moenarch-media-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde",
  "serde_json",
 ]
@@ -1681,9 +1706,9 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71c5789282ef323dd8905e54abe6b7ebacdb9b49362f9b38284f5eb14b1c27a4"
 dependencies = [
- "moenarch-jobs-core",
+ "moenarch-jobs-core 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "moenarch-media-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde",
  "serde_json",
  "unicode-normalization",
@@ -1697,7 +1722,7 @@ source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e
 dependencies = [
  "moenarch-media-core",
  "moenarch-numbers-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde",
  "serde_json",
 ]
@@ -1710,7 +1735,7 @@ dependencies = [
  "moenarch-audio-contracts",
  "moenarch-math-geometry-2d",
  "moenarch-media-core",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-text-core",
  "num-rational",
  "num-traits",
@@ -1724,7 +1749,7 @@ name = "moenarch-video-analysis-detectors"
 version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=f73969447916e5ac47f4559fc51ab47552f4f734#f73969447916e5ac47f4559fc51ab47552f4f734"
 dependencies = [
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-video-analysis-core",
  "scenedetect-core",
  "serde",
@@ -1736,7 +1761,7 @@ name = "moenarch-video-analysis-ffmpeg"
 version = "0.1.1"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=f73969447916e5ac47f4559fc51ab47552f4f734#f73969447916e5ac47f4559fc51ab47552f4f734"
 dependencies = [
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-video-analysis-core",
  "moenarch-video-analysis-ingest",
  "num-rational",
@@ -1750,7 +1775,7 @@ version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=f73969447916e5ac47f4559fc51ab47552f4f734#f73969447916e5ac47f4559fc51ab47552f4f734"
 dependencies = [
  "moenarch-image-analysis-ocr",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-video-analysis-core",
  "moenarch-video-analysis-detectors",
  "moenarch-video-analysis-recognition",
@@ -1767,7 +1792,7 @@ dependencies = [
  "moenarch-image-analysis-core",
  "moenarch-image-analysis-ocr",
  "moenarch-model-runtime",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "moenarch-runtime-onnx",
  "moenarch-semantic-core",
  "moenarch-video-analysis-core",
@@ -1782,7 +1807,7 @@ version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=f73969447916e5ac47f4559fc51ab47552f4f734#f73969447916e5ac47f4559fc51ab47552f4f734"
 dependencies = [
  "moenarch-math-geometry-2d",
- "moenarch-runtime-core",
+ "moenarch-runtime-core 0.2.1 (git+https://github.com/moritzbrantner/moenarch-foundation?rev=b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9)",
  "serde",
  "serde_json",
 ]

@@ -30,7 +30,7 @@ default = []
 # that the runtime is missing.
 audio-analysis = ["dep:audio-analysis-transcription"]
 # Real native Candle Whisper inference (heavy compile; not built by default CI or tests).
-audio-analysis-candle = ["audio-analysis", "audio-analysis-transcription/candle"]
+audio-analysis-candle = ["audio-analysis", "audio-analysis-transcription/candle", "audio-analysis-transcription/model-bundles"]
 # Container audio decoding for the speech adapter (#34): forwards audio-analysis `audio-io`
 # so Candle Whisper reads the audio track of video/media files (WebM, MP4, ...) through
 # audio-analysis' own FFmpeg-backed decoder instead of WAV only.

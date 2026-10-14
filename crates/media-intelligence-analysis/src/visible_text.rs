@@ -268,7 +268,8 @@ impl VisibleTextProducer for VisualAnalysisOcrProducer {
             ));
         };
         if let OcrBackendConfig::OnnxTrOcr(options) = &self.config.backend {
-            if !options.bundle_root.exists() {
+            // With an allowed download the bundle root is created by the one-time fetch.
+            if !options.auto_download && !options.bundle_root.exists() {
                 return Err(failed(format!(
                     "configured ONNX TrOCR bundle_root `{}` does not exist; provide the model \
                      files locally",
