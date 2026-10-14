@@ -16,7 +16,8 @@
 //!   * Candle Whisper with neither `model_bundle` nor `model_cache_only`;
 //!   * external WhisperX without `model_cache_only`;
 //!   * enabled forced alignment with neither `model_bundle` nor `model_cache_only`;
-//!   * external WhisperX with `diarize` (its pyannote pipeline ignores `model_cache_only`).
+//!   * external WhisperX with alignment enabled (`no_align = false`) or `diarize`: its
+//!     torchaudio/NLTK alignment and pyannote diarization ignore `model_cache_only`.
 //!
 //!   whisper.cpp (explicit `model_path`) and diarization (local bundles) never download.
 //!   The refusal happens at construction, before anything runs.
@@ -153,6 +154,16 @@ impl AudioAnalysisSpeechConfig {
                 return Some(
                     "external WhisperX without `model_cache_only` may download models; set \
                      `model_cache_only` with a populated `model_dir`"
+                        .to_string(),
+                );
+            }
+            TranscriptionProviderSelection::ExternalWhisperX(options) if !options.no_align => {
+                // WhisperX loads torchaudio alignment bundles and NLTK data without honouring
+                // `model_cache_only`, so its alignment can still reach the network.
+                return Some(
+                    "external WhisperX alignment may download torchaudio/NLTK alignment data \
+                     even with `model_cache_only`; set `no_align` (use the local audio-analysis \
+                     alignment options instead)"
                         .to_string(),
                 );
             }
