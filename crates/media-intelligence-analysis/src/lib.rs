@@ -45,6 +45,8 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+mod execution;
+
 pub use media_intelligence_core::{
     AssetId, CompositionError, ContentHash, EvidenceAnalysis, MediaIdentity, Modality,
     ProducerReceipt, SceneRun, SpeechRun, VisibleTextRun,
@@ -73,7 +75,10 @@ pub struct SceneConfig {
 impl Default for SceneConfig {
     /// Threshold 27.0 and minimum scene length 15 frames (the YouTube Corpus defaults).
     fn default() -> Self {
-        todo!("implementation pending (#27)")
+        Self {
+            threshold: 27.0,
+            min_scene_len: 15,
+        }
     }
 }
 
@@ -81,7 +86,39 @@ impl SceneConfig {
     /// Deterministic `sha256:<hex>` hash of the effective configuration. Equal
     /// configurations give equal hashes; changing any field changes the hash.
     pub fn config_hash(&self) -> String {
-        todo!("implementation pending (#27)")
+        let identity = format!(
+            "visual-analysis.detect_content_scenes;threshold-bits={:08x};min-scene-len={}",
+            self.threshold.to_bits(),
+            self.min_scene_len
+        );
+        execution::sha256_prefixed(identity.as_bytes())
+    }
+
+    fn validate(&self) -> Result<(), AnalysisError> {
+        if !self.threshold.is_finite() || self.threshold < 0.0 {
+            return Err(AnalysisError::InvalidSceneConfig {
+                reason: format!(
+                    "scene threshold must be finite and non-negative, got {}",
+                    self.threshold
+                ),
+            });
+        }
+        if self.min_scene_len == 0 {
+            return Err(AnalysisError::InvalidSceneConfig {
+                reason: "minimum scene length must be greater than zero".to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    fn producer_identity(&self) -> ProducerIdentity {
+        ProducerIdentity {
+            producer: SCENE_PRODUCER.to_string(),
+            producer_version: VISUAL_ANALYSIS_REVISION.to_string(),
+            model: SCENE_MODEL.to_string(),
+            model_version: SCENE_MODEL_VERSION.to_string(),
+            config_hash: self.config_hash(),
+        }
     }
 }
 
@@ -197,32 +234,37 @@ pub struct InMemoryStageCache {
 
 impl InMemoryStageCache {
     pub fn new() -> Self {
-        todo!("implementation pending (#27)")
+        Self::default()
     }
 
     /// Number of stored stage results.
     pub fn len(&self) -> usize {
-        let _ = &self.entries;
-        todo!("implementation pending (#27)")
+        self.entries.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        todo!("implementation pending (#27)")
+        self.entries.is_empty()
     }
 
     /// Stored keys, in insertion order.
     pub fn keys(&self) -> Vec<StageKey> {
-        todo!("implementation pending (#27)")
+        self.entries.iter().map(|(key, _)| key.clone()).collect()
     }
 }
 
 impl StageCache for InMemoryStageCache {
-    fn get(&self, _key: &StageKey) -> Option<CachedStage> {
-        todo!("implementation pending (#27)")
+    fn get(&self, key: &StageKey) -> Option<CachedStage> {
+        self.entries
+            .iter()
+            .find(|(stored, _)| stored == key)
+            .map(|(_, stage)| stage.clone())
     }
 
-    fn put(&mut self, _key: StageKey, _stage: CachedStage) {
-        todo!("implementation pending (#27)")
+    fn put(&mut self, key: StageKey, stage: CachedStage) {
+        match self.entries.iter_mut().find(|(stored, _)| *stored == key) {
+            Some(entry) => entry.1 = stage,
+            None => self.entries.push((key, stage)),
+        }
     }
 }
 
@@ -234,17 +276,15 @@ pub struct CancellationToken {
 
 impl CancellationToken {
     pub fn new() -> Self {
-        todo!("implementation pending (#27)")
+        Self::default()
     }
 
     pub fn cancel(&self) {
-        let _ = Ordering::SeqCst;
-        let _ = &self.cancelled;
-        todo!("implementation pending (#27)")
+        self.cancelled.store(true, Ordering::SeqCst);
     }
 
     pub fn is_cancelled(&self) -> bool {
-        todo!("implementation pending (#27)")
+        self.cancelled.load(Ordering::SeqCst)
     }
 }
 
@@ -294,8 +334,11 @@ pub struct AnalysisReport {
 impl AnalysisReport {
     /// The status of `modality`.
     pub fn status(&self, modality: Modality) -> &StageStatus {
-        let _ = modality;
-        todo!("implementation pending (#27)")
+        match modality {
+            Modality::Speech => &self.speech,
+            Modality::VisibleText => &self.visible_text,
+            Modality::Scene => &self.scenes,
+        }
     }
 }
 
@@ -332,8 +375,7 @@ impl std::error::Error for AnalysisError {}
 
 /// The receipt `input_hash` for media with this content hash: `sha256:<hex>`.
 pub fn input_hash(content_hash: &ContentHash) -> String {
-    let _ = content_hash;
-    todo!("implementation pending (#27)")
+    format!("sha256:{}", content_hash.as_str())
 }
 
 /// Runs the requested stages for one caller-owned media file and composes their runs.
@@ -343,6 +385,5 @@ pub fn analyze(
     cache: &mut dyn StageCache,
     cancellation: &CancellationToken,
 ) -> Result<AnalysisReport, AnalysisError> {
-    let _ = (request, producers, cache, cancellation);
-    todo!("implementation pending (#27)")
+    execution::analyze(request, producers, cache, cancellation)
 }

@@ -54,6 +54,9 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install ffmpeg (real scene-producer tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Check formatting
         run: cargo fmt --all --check
 
@@ -61,7 +64,10 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test --locked
+        run: cargo test --locked 2>&1 | tee test.log
+
+      - name: Require real scene-producer execution
+        run: "! grep -q SKIPPED test.log"
 
       - name: Run the composition example
         run: cargo run --locked -p media-intelligence-core --example compose -- crates/media-intelligence-core/tests/fixtures/lecture_composition.json > /dev/null
