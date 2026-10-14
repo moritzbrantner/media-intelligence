@@ -247,7 +247,7 @@ class ToolFeedProvider(SourceProvider):
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or "").strip().splitlines()[-1:] or [f"exit status {exc.returncode}"]
             if NO_VIDEOS_TAB_MESSAGE in (exc.stderr or ""):
-                raise _MissingVideosTab(f"yt-dlp failed: {detail[0]}", detail[0]) from exc
+                raise _MissingVideosTab(f"yt-dlp failed: {detail[0]}", exc.stderr or "") from exc
             raise SourceCheckError(f"yt-dlp failed: {detail[0]}") from exc
         except json.JSONDecodeError as exc:
             raise SourceCheckError("yt-dlp returned invalid JSON") from exc
@@ -274,7 +274,7 @@ class ToolFeedProvider(SourceProvider):
 
 
 NO_VIDEOS_TAB_MESSAGE = "does not have a videos tab"
-_CHANNEL_ID = re.compile(r"\bUC[0-9A-Za-z_-]{22}\b")
+_CHANNEL_ID = re.compile(r"(?<![0-9A-Za-z_-])UC[0-9A-Za-z_-]{22}(?![0-9A-Za-z_-])")
 
 
 class _MissingVideosTab(SourceCheckError):
