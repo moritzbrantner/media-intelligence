@@ -303,3 +303,31 @@ fn wrong_modality_receipt_fails_only_its_stage() {
         StageStatus::CompletedWithFindings { .. }
     ));
 }
+
+#[test]
+fn scene_bound_identity_changes_when_only_the_intervals_change() {
+    use media_intelligence_analysis::{scene_bound_identity, SceneRun};
+    use media_intelligence_core::SceneInterval;
+
+    let interval = |end: f64| SceneInterval {
+        id: "scene-0".to_string(),
+        index: 0,
+        start_seconds: 0.0,
+        end_seconds: end,
+        start_frame: Some(0),
+        end_frame: Some((end * 25.0) as u64),
+    };
+    let run = |end: f64| SceneRun {
+        receipt: receipt(Modality::Scene, &identity("scenes"), "sha256:x"),
+        scenes: vec![interval(end)],
+    };
+    let own = identity("ocr");
+    assert_eq!(
+        scene_bound_identity(&own, &run(5.0)),
+        scene_bound_identity(&own, &run(5.0))
+    );
+    assert_ne!(
+        scene_bound_identity(&own, &run(5.0)).config_hash,
+        scene_bound_identity(&own, &run(6.0)).config_hash
+    );
+}

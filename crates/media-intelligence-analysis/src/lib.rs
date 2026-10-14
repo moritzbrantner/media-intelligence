@@ -229,8 +229,9 @@ pub trait VisibleTextProducer {
 
 /// The identity under which a scene-dependent visible-text producer's run is cached and
 /// receipted (#33): `identity` with `config_hash` replaced by a deterministic
-/// `sha256:<64 hex>` over `identity.config_hash` and the scene run's receipt identity
-/// (producer, producer version, model, model version and config hash). Every other field is
+/// `sha256:<64 hex>` over `identity.config_hash`, the scene run's receipt identity
+/// (producer, producer version, model, model version and config hash) and its scene
+/// intervals (ids, indices, seconds and frames). Every other field is
 /// unchanged. Equal inputs give equal results; a different scene configuration (a different
 /// scene receipt `config_hash`) or a different own `config_hash` gives a different hash.
 pub fn scene_bound_identity(identity: &ProducerIdentity, scenes: &SceneRun) -> ProducerIdentity {
@@ -244,6 +245,22 @@ pub fn scene_bound_identity(identity: &ProducerIdentity, scenes: &SceneRun) -> P
             scene.model_version,
             scene.config_hash,
         ],
+        // The intervals themselves, so a cached scene run with the same receipt but other
+        // boundaries never reuses OCR sampled from the old intervals.
+        "intervals": scenes
+            .scenes
+            .iter()
+            .map(|interval| {
+                serde_json::json!([
+                    interval.id,
+                    interval.index,
+                    interval.start_seconds,
+                    interval.end_seconds,
+                    interval.start_frame,
+                    interval.end_frame,
+                ])
+            })
+            .collect::<Vec<_>>(),
     });
     ProducerIdentity {
         config_hash: execution::sha256_prefixed(material.to_string().as_bytes()),
