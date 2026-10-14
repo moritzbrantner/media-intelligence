@@ -1414,6 +1414,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "moenarch-audio-analysis-io"
+version = "0.1.1"
+source = "git+https://github.com/moritzbrantner/audio-analysis?rev=cc8075f633a4bda5d1b9902b3f4c4d07eca017d9#cc8075f633a4bda5d1b9902b3f4c4d07eca017d9"
+dependencies = [
+ "hound",
+ "moenarch-audio-analysis-core",
+ "moenarch-audio-contracts",
+ "moenarch-runtime-core",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "moenarch-audio-analysis-recognition"
 version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/audio-analysis?rev=cc8075f633a4bda5d1b9902b3f4c4d07eca017d9#cc8075f633a4bda5d1b9902b3f4c4d07eca017d9"
@@ -1452,6 +1465,7 @@ dependencies = [
  "flate2",
  "half",
  "hound",
+ "moenarch-audio-analysis-io",
  "moenarch-audio-analysis-speakers",
  "moenarch-media-core",
  "moenarch-runtime-core",

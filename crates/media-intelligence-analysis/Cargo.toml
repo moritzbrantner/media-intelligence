@@ -31,6 +31,10 @@ default = []
 audio-analysis = ["dep:audio-analysis-transcription"]
 # Real native Candle Whisper inference (heavy compile; not built by default CI or tests).
 audio-analysis-candle = ["audio-analysis", "audio-analysis-transcription/candle"]
+# Container audio decoding for the speech adapter (#34): forwards audio-analysis `audio-io`
+# so Candle Whisper reads the audio track of video/media files (WebM, MP4, ...) through
+# audio-analysis' own FFmpeg-backed decoder instead of WAV only.
+audio-analysis-media = ["audio-analysis", "audio-analysis-transcription/audio-io"]
 # Opt-in visible-text producer adapter (#33) over visual-analysis scene-aware OCR and text
 # tracking. Without a further runtime feature, the ONNX TrOCR backend compiles but reports
 # that its runtime is missing; the JSON external-command backend works.
@@ -50,3 +54,9 @@ tempfile.workspace = true
 num-rational.workspace = true
 # Only to implement a fixture `OcrBackend` (its `ImageView` argument) in the #33 mapping test.
 image-analysis-core.workspace = true
+
+# Native video-analysis example (#34): speech + scenes + OCR on one local media file,
+# printing the report JSON. Real models only; see ACCEPTANCE.md "#34" for the CLI contract.
+[[example]]
+name = "analyze_video"
+required-features = ["audio-analysis-candle", "audio-analysis-media", "visual-analysis-ocr-onnx"]
