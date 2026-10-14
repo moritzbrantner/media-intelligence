@@ -15,7 +15,8 @@
 //!   [`ModelFetchPolicy::AllowNetwork`]. Download-capable means:
 //!   * Candle Whisper with neither `model_bundle` nor `model_cache_only`;
 //!   * external WhisperX without `model_cache_only`;
-//!   * enabled forced alignment with neither `model_bundle` nor `model_cache_only`.
+//!   * enabled forced alignment with neither `model_bundle` nor `model_cache_only`;
+//!   * external WhisperX with `diarize` (its pyannote pipeline ignores `model_cache_only`).
 //!
 //!   whisper.cpp (explicit `model_path`) and diarization (local bundles) never download.
 //!   The refusal happens at construction, before anything runs.
@@ -26,14 +27,15 @@
 //!   [`UNSPECIFIED_MODEL_VERSION`], `config_hash` = [`AudioAnalysisSpeechConfig::config_hash`].
 //! * **Config hash.** A deterministic `sha256:<64 hex>` over the effective transcription
 //!   options: the provider selection with all its options (including model locations), and
-//!   the VAD, alignment and diarization options. It does not cover the
+//!   the VAD, alignment and diarization options; a disabled VAD, alignment or diarization
+//!   stage contributes only its `enabled` flag. It does not cover the
 //!   [`ModelFetchPolicy`] (a permission, not an option) or the declared model version
 //!   (already a separate identity field).
 //! * **Run.** [`SpeechProducer::run`] checks cancellation first and returns
 //!   [`ProducerError::Cancelled`] without touching audio-analysis or the file system.
-//!   It then checks every explicitly configured local model location (Candle
-//!   `model_bundle`/`model_dir`, whisper.cpp `model_path`, which must be present, WhisperX
-//!   `model_dir`, alignment `model_bundle`/`model_dir`). A missing location is
+//!   It then checks the local model location audio-analysis will actually read (Candle
+//!   `model_bundle`, else `model_dir`; whisper.cpp `model_path`, which must be present;
+//!   WhisperX `model_dir`; enabled alignment `model_bundle`, else `model_dir`). A missing location is
 //!   [`ProducerError::Failed`] with a reason naming the option and the path, before
 //!   audio-analysis is called. Otherwise it calls `transcribe` with
 //!   [`AudioAnalysisSpeechProducer::transcription_request`] and maps the response with
@@ -110,11 +112,20 @@ impl AudioAnalysisSpeechConfig {
     pub fn config_hash(&self) -> String {
         // serde_json writes struct fields in declaration order, so equal options always
         // serialize identically.
+        // A disabled stage contributes only its `enabled` flag: settings it would ignore
+        // cannot change the transcript, so they must not invalidate cached runs.
+        let stage = |enabled: bool, options: serde_json::Value| {
+            if enabled {
+                options
+            } else {
+                json!({ "enabled": false })
+            }
+        };
         let material = json!({
             "provider": &self.provider,
-            "vad": &self.vad,
-            "alignment": &self.alignment,
-            "diarization": &self.diarization,
+            "vad": stage(self.vad.enabled, json!(&self.vad)),
+            "alignment": stage(self.alignment.enabled, json!(&self.alignment)),
+            "diarization": stage(self.diarization.enabled, json!(&self.diarization)),
         });
         sha256_prefixed(
             serde_json::to_string(&material)
@@ -145,6 +156,16 @@ impl AudioAnalysisSpeechConfig {
                         .to_string(),
                 );
             }
+            TranscriptionProviderSelection::ExternalWhisperX(options) if options.diarize => {
+                // WhisperX applies cache-only to ASR and alignment but not to its pyannote
+                // diarization pipeline, which can still fetch from Hugging Face.
+                return Some(
+                    "external WhisperX `diarize` may download the pyannote diarization model \
+                     even with `model_cache_only`; disable `diarize` (use the local \
+                     audio-analysis diarization options instead)"
+                        .to_string(),
+                );
+            }
             _ => {}
         }
         if self.alignment.enabled
@@ -166,9 +187,13 @@ impl AudioAnalysisSpeechConfig {
     fn missing_model_location(&self) -> Option<String> {
         let mut locations: Vec<(&str, Option<&Path>)> = Vec::new();
         match &self.provider {
+            // audio-analysis resolves a bundle before a model directory, so only the
+            // location it will actually read is checked.
             TranscriptionProviderSelection::CandleWhisper(options) => {
-                locations.push(("candle model_bundle", options.model_bundle.as_deref()));
-                locations.push(("candle model_dir", options.model_dir.as_deref()));
+                match options.model_bundle.as_deref() {
+                    Some(bundle) => locations.push(("candle model_bundle", Some(bundle))),
+                    None => locations.push(("candle model_dir", options.model_dir.as_deref())),
+                }
             }
             TranscriptionProviderSelection::WhisperCpp(options) => {
                 let Some(path) = options.model_path.as_deref() else {
@@ -183,11 +208,12 @@ impl AudioAnalysisSpeechConfig {
             }
         }
         if self.alignment.enabled {
-            locations.push((
-                "alignment model_bundle",
-                self.alignment.model_bundle.as_deref(),
-            ));
-            locations.push(("alignment model_dir", self.alignment.model_dir.as_deref()));
+            match self.alignment.model_bundle.as_deref() {
+                Some(bundle) => locations.push(("alignment model_bundle", Some(bundle))),
+                None => {
+                    locations.push(("alignment model_dir", self.alignment.model_dir.as_deref()))
+                }
+            }
         }
         locations.into_iter().find_map(|(option, path)| {
             let path = path?;
