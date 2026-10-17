@@ -18,7 +18,7 @@ moenarch-corpus-core = { git = "https://github.com/moritzbrantner/moenarch-found
 moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
 # Canonical scene producer (#27): visual-analysis at an exact public revision. Detection
 # itself is scenedetect-core, reached only through these crates.
-video-analysis-ffmpeg = { package = "moenarch-video-analysis-ffmpeg", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
+video-analysis-ffmpeg = { package = "moenarch-video-analysis-ffmpeg", git = "https://github.com/moritzbrantner/visual-analysis", rev = "49fb183e9ffdc13fa12eb88cf444e15ce9f9ffb1" }
 video-analysis-ingest = { package = "moenarch-video-analysis-ingest", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
 tempfile = "3.23.0"
 # Visible-text producer (#33): visual-analysis OCR backends, the scene-aware OCR sampling
