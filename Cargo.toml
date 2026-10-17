@@ -32,7 +32,7 @@ num-rational = "0.4.2"
 # Canonical speech producer (#32): audio-analysis transcription at an exact public revision.
 # Only `media-intelligence-analysis`'s opt-in `audio-analysis` feature uses it. ASR,
 # model resolution and decoding stay inside audio-analysis.
-audio-analysis-transcription = { package = "moenarch-audio-analysis-transcription", git = "https://github.com/moritzbrantner/audio-analysis", rev = "cc8075f633a4bda5d1b9902b3f4c4d07eca017d9", default-features = false }
+audio-analysis-transcription = { package = "moenarch-audio-analysis-transcription", git = "https://github.com/moritzbrantner/audio-analysis", rev = "15ca9b157d4437b58b5cd1820a773c5f4a275014", default-features = false }
 
 # visual-analysis (115c1f0, now f739694) declares registry requirements on Foundation crates (its own
 # source-deps file names foundation b7533cd). These patches resolve them to the one

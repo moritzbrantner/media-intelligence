@@ -1402,7 +1402,7 @@ dependencies = [
 [[package]]
 name = "moenarch-audio-analysis-core"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/audio-analysis?rev=cc8075f633a4bda5d1b9902b3f4c4d07eca017d9#cc8075f633a4bda5d1b9902b3f4c4d07eca017d9"
+source = "git+https://github.com/moritzbrantner/audio-analysis?rev=15ca9b157d4437b58b5cd1820a773c5f4a275014#15ca9b157d4437b58b5cd1820a773c5f4a275014"
 dependencies = [
  "moenarch-audio-contracts",
  "moenarch-math-signal-core",
@@ -1416,7 +1416,7 @@ dependencies = [
 [[package]]
 name = "moenarch-audio-analysis-recognition"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/audio-analysis?rev=cc8075f633a4bda5d1b9902b3f4c4d07eca017d9#cc8075f633a4bda5d1b9902b3f4c4d07eca017d9"
+source = "git+https://github.com/moritzbrantner/audio-analysis?rev=15ca9b157d4437b58b5cd1820a773c5f4a275014#15ca9b157d4437b58b5cd1820a773c5f4a275014"
 dependencies = [
  "moenarch-audio-analysis-core",
  "moenarch-audio-contracts",
@@ -1430,7 +1430,7 @@ dependencies = [
 [[package]]
 name = "moenarch-audio-analysis-speakers"
 version = "0.1.4"
-source = "git+https://github.com/moritzbrantner/audio-analysis?rev=cc8075f633a4bda5d1b9902b3f4c4d07eca017d9#cc8075f633a4bda5d1b9902b3f4c4d07eca017d9"
+source = "git+https://github.com/moritzbrantner/audio-analysis?rev=15ca9b157d4437b58b5cd1820a773c5f4a275014#15ca9b157d4437b58b5cd1820a773c5f4a275014"
 dependencies = [
  "moenarch-audio-analysis-core",
  "moenarch-audio-analysis-recognition",
@@ -1443,7 +1443,7 @@ dependencies = [
 [[package]]
 name = "moenarch-audio-analysis-transcription"
 version = "0.1.15"
-source = "git+https://github.com/moritzbrantner/audio-analysis?rev=cc8075f633a4bda5d1b9902b3f4c4d07eca017d9#cc8075f633a4bda5d1b9902b3f4c4d07eca017d9"
+source = "git+https://github.com/moritzbrantner/audio-analysis?rev=15ca9b157d4437b58b5cd1820a773c5f4a275014#15ca9b157d4437b58b5cd1820a773c5f4a275014"
 dependencies = [
  "candle-core",
  "candle-nn",
