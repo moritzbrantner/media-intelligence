@@ -378,3 +378,141 @@ new field (mechanical).
   cancellation hook); only cancellation before the run is.
 - Upstream sampling density and tracking heuristics are trusted, not re-tested; the tests
   assert only start/middle/last coverage per scene and the resulting grouping.
+
+# Acceptance: issue #34 (model-backed acceptance: real ASR + OCR + scenes)
+
+The independent acceptance agent wrote this contract **before** the implementation. It
+adds a committed fixture, cheap always-built fixture checks, an opt-in model-backed test
+file, the `audio-analysis-media` feature declaration and a stub example
+(`examples/analyze_video.rs`, body `todo!("implementation pending (#34)")`). No production
+code changed.
+
+## Spec sources
+
+- media-intelligence issue #34 (body), the owner decision of 2026-10-14 (download the
+  models on the owner's machine, outside the repositories; the loop picks a CC video with
+  speech and slide text and records URL, licence and hash; excerpts may be committed with
+  attribution where the licence allows) and the work-loop preflight comment (video choice,
+  Whisper `openai/whisper-base.en` and Xenova `trocr-base-printed`, an opt-in feature
+  forwarding audio-analysis `audio-io`, a documented native example).
+- #27's original acceptance ("Try / Observe / Prove": a documented example on one local
+  representative video with known spoken words, separate slide text and at least two scene
+  intervals; rerun unchanged and change one provider configuration; missing-model,
+  cancelled and disabled-detector cases; label replayed evidence separately from real model
+  runs).
+- The #27/#32/#33 seam: `analyze`, `speech::AudioAnalysisSpeechProducer`,
+  `visible_text::VisualAnalysisOcrProducer`, `scene_bound_identity`, `ModelFetchPolicy`.
+- Pinned upstreams (read-only): audio-analysis `cc8075f` (`CandleWhisperOptions`,
+  `native_whisper.rs` model resolution, `native_audio.rs` decode routes, feature `audio-io`
+  = `audio-analysis-io`, FFmpeg-backed), visual-analysis `f739694`
+  (`OcrLocalModelOptions`, `OcrPreset::TrOcrBasePrintedOnnx` = `Xenova/trocr-base-printed`).
+
+## Fixture provenance and licence
+
+`tests/fixtures/model_acceptance/wcc-excerpt.webm` (465 062 bytes, sha256
+`c954e099…db8d`) is seconds 7.9 – 39.9 of "Wikimedia Core Curriculum - Initial steps" by
+Aespinoza09 (Wikimedia Commons, **CC BY 4.0**, original sha256 `29af9da7…dec4`),
+re-encoded to 960x540 VP9 + mono Vorbis. Attribution, the exact ffmpeg command and the
+observed on-screen text are in that directory's `README.md`. The narration is an
+AI-generated voice reading full-screen slides. Observed slides (excerpt seconds):
+Benefits of Creating an Account [0, 4.77), Step 1: Go to Wikipedia & Click 'Create
+Account' [4.77, 12.17), Step 2: Fill out the Form [12.17, 19.89), Step 3: Choosing the
+right username [19.89, 32.0). The window was chosen for its large, clean slide text
+(Benefits slide) and four distinct titles; the opening logo/title animation was left out.
+
+## Feature and environment contract
+
+- `audio-analysis-media = ["audio-analysis", "audio-analysis-transcription/audio-io"]`
+  (declared here; Cargo.lock gains `moenarch-audio-analysis-io` from the same pinned
+  audio-analysis revision). Without it audio-analysis reads WAV only, so Whisper cannot
+  read the excerpt's audio track.
+- `tests/model_backed_acceptance.rs` compiles only with `audio-analysis-candle`,
+  `audio-analysis-media` and `visual-analysis-ocr-onnx`. At run time each test prints
+  `SKIPPED (model acceptance not configured)` and returns unless `MI_MODEL_ACCEPTANCE=1`.
+  With it set, `MI_WHISPER_MODEL_DIR` (local Candle Whisper **bundle** directory, passed as
+  `model_bundle`) and `MI_TROCR_BUNDLE_ROOT` (TrOCR `bundle_root`, `auto_download` off) are
+  required and must exist, and ffmpeg/ffprobe must be on PATH; otherwise the test panics
+  rather than skipping. Optional: `MI_WHISPER_MODEL_ID` (default
+  `openai/whisper-base.en`), `MI_TROCR_CACHE_DIR`. Both adapters are built with
+  `ModelFetchPolicy::LocalOnly`; the tests never download.
+- Run with `--test-threads=1` (the model tests also take a process-wide lock).
+
+## Tests
+
+| File | Proves |
+| --- | --- |
+| `model_acceptance_fixture.rs` (default features, no model) | <ul><li>The committed bytes hash to the recorded sha256 and stay under 1.5 MB.</li><li>The README names title, author, source URL, CC BY 4.0 with link, the "excerpt, re-encoded" note, the ffmpeg command and both hashes.</li><li>The OCR matcher tolerates OCR noise but no two slide words can be confused, and the every-slide footer ("WIKIMEDIA" is one edit from "Wikipedia") never counts.</li><li>The real canonical scene producer on the excerpt yields ≥ 2 scenes from 0 to 32.0 s, cuts only at observed visual changes, and at least one cut is a title change. Observed: [0, 8.40), [8.40, 19.88), [19.88, 32.0).</li></ul> |
+| `model_backed_acceptance.rs` (opt-in, real models) | <ul><li>**Real run:** speech, scenes and OCR `CompletedWithFindings`; every item carries the excerpt's asset id, content hash and `sha256:c954…` input hash; receipts name `audio-analysis:candle-whisper` @ `AUDIO_ANALYSIS_REVISION` with the Whisper model id, `visual-analysis` / `scenedetect-core:content`, and `visual-analysis:onnx-trocr` @ `VISUAL_ANALYSIS_REVISION` / `Xenova/trocr-base-printed` with the scene-bound config hash. Speech: ≥ 30 words, segments inside [0, 32.012 + 0.5] s covering ≥ 16 s, and at least one slide word (`wikipedia`, `account(s)`, `username(s)`, `create`, `creating`, `form`, `benefits`) as a whole token. Scenes: as in the fixture test. OCR: at least one reading contains a content word of the slide on screen at that observation's time (± 0.6 s); no reading repeats within one scene (no repeated-frame inflation). Coverage is `completed_with_findings` for all three, and scene→speech, scene→OCR and speech↔OCR co-occurrence relations exist and point at real items. The full report JSON is printed for the evidence record.</li><li>**Unchanged rerun**, same cache: all three `Reused` with the first receipts and counts; the analysis is identical.</li><li>**Only the OCR request changes** (one adapter attribute): OCR re-runs with a new config hash; speech and scenes are `Reused` and their evidence is unchanged; the cache holds both OCR runs.</li><li>**Missing TrOCR bundle:** OCR `Failed`, reason names `bundle_root` and the path; speech and scenes still delivered; failure not cached.</li><li>**Missing Whisper bundle** (fresh cache): speech `Failed` naming the path; real scenes and real OCR complete; no speech cache entry or co-occurrence relation.</li><li>**Speech not requested** (producer supplied): `NotRequested`, coverage `not_requested`, no speech evidence or speech relations; scenes and OCR complete.</li><li>**Pre-cancelled:** every stage `Cancelled`, no evidence, no relations, nothing cached, no model loaded.</li></ul> |
+
+Only the opt-in file shows that the models ran. The fixture checks prove the fixture,
+the matchers and the real scene producer; they replay nothing.
+
+## Why the thresholds hold
+
+- **No exact transcript.** There is no reference transcript and the narration was not
+  listened to. Speech is checked against words printed on the slides the narrator reads;
+  `whisper-base.en` on a clean synthetic voice has a low word error rate, so a correct
+  recognition of slides about creating an account and choosing a username contains at
+  least one of them. The 30-word floor and 16 s coverage come from near-continuous
+  narration (RMS above -25 dBFS in 31 of 32 seconds); a stub, an empty transcript or a
+  single hallucinated phrase fails them.
+- **Segment end tolerance 0.5 s.** Whisper timestamps are 0.02 s steps within padded 30 s
+  windows; more than 0.5 s past the container end is a mapping error.
+- **Boundary tolerance 0.6 s.** Animated transitions last up to 0.52 s and change points
+  are frame-quantised (0.04 s); slides last ≥ 4.77 s, so title changes cannot be confused.
+- **Scene assertions are weaker than "a cut at every title".** The default detector
+  (threshold 27) does not cut at 4.77 s or 12.17 s: those slides share background and
+  layout and only the title text changes. That is the canonical producer's behaviour,
+  not this crate's to change; the test requires ≥ 2 scenes, no cut in static stretches and
+  at least one title change cut (19.88 s).
+- **OCR noise budget.** A token of length ≥ 4 matches a slide word within edit distance
+  ⌊len/4⌋ (one error for 4–7 letters, two for 8–11), and never when it is at least as
+  close to the footer words "wikimedia"/"foundation". OCR is placed by observation time
+  against the observed slide windows, not against detected scenes, because the detected
+  middle scene spans two slides.
+- **OCR request change.** One `OcrRequest::attributes` entry changes the hashed request and
+  nothing a TrOCR backend reads, so only the OCR stage key changes.
+
+## Decisions fixed by this acceptance (resolved by the acceptance agent)
+
+- **`MI_WHISPER_MODEL_DIR` is a bundle directory** used as `model_bundle`, not a Hugging
+  Face cache root with `model_cache_only`: at audio-analysis `cc8075f`, cache-only
+  resolution exists only with that crate's `model-bundles` feature, which none of this
+  crate's features enable. The preflight's bundle at
+  `~/.cache/media-intelligence-acceptance/models/whisper-base.en` currently holds
+  `config.json`, `tokenizer.json` and `model.safetensors` only; Candle also requires
+  `generation_config.json` and `preprocessor_config.json`.
+- **The example's `--allow-network` Whisper download** needs audio-analysis
+  `model-bundles` (its `HuggingFaceDownloader` path). The implementation may add a feature
+  forwarding it (and list it in the example's `required-features`) or make the example
+  exit non-zero with an actionable message when the download path is unavailable. The
+  test file does not depend on it.
+- **Scene tolerance comes from the producer's observed behaviour** on the committed bytes
+  (see above), not from the title table.
+- **Speech-not-requested runs real OCR** and the missing-Whisper case uses a fresh cache, so
+  "the others complete" means they actually ran, not only that they were reused.
+
+## Example contract
+
+`examples/analyze_video.rs` (`required-features` = the three model features): positional
+media path; `--asset-id`, `--whisper-model-dir`, `--whisper-model` (default
+`openai/whisper-base.en`), `--trocr-bundle-root`, `--trocr-cache-dir`, `--allow-network`
+(one-time model download; otherwise `LocalOnly`), `--no-speech`, `--no-ocr`,
+`--no-scenes`. It hashes the file, runs `analyze` with an in-memory cache, and prints one
+`AnalysisReport` as JSON on stdout. Missing model flags make that modality `unavailable`;
+non-existent model locations make it `failed` while other stages run. Exit 0 whenever a
+report is printed; non-zero for usage errors, a missing file, a refused download-capable
+configuration or `AnalysisError`. The full contract is the file's doc comment.
+
+## What #34 acceptance does not prove
+
+- Transcript accuracy beyond the vocabulary, word-count and coverage floors; speaker,
+  language and alignment quality.
+- OCR quality beyond one matching word: TrOCR is a single-line recogniser applied to whole
+  sampled frames (preflight), so most readings may be noisy. The test records what it
+  returns (printed readings); it does not require each slide to be read.
+- The full 139.7 s video run and the example's output are evidence for the implementation
+  PR, not assertions here. Download behaviour (`--allow-network`) is not tested.
+- Cancellation during a running model pass (no upstream hook); GPU paths; timing.
+- Default CI builds neither Candle nor ONNX Runtime, so `model_backed_acceptance.rs` is
+  compiled only in a resource-equipped, opt-in run.
