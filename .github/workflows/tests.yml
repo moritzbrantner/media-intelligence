@@ -2,6 +2,7 @@ name: Tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -58,3 +59,14 @@ jobs:
 
       - name: Run the composition example
         run: cargo run --locked -p media-intelligence-core --example compose -- crates/media-intelligence-core/tests/fixtures/lecture_composition.json > /dev/null
+
+  merge-ready:
+    name: merge-ready
+    if: ${{ always() }}
+    needs: ["cross-project-contracts", "rust-core"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: moritzbrantner/reusable-workflows/.github/actions/merge-ready@b0f25f241d76af2584dfc9e375084ff5c5cb97da
+        with:
+          needs: ${{ toJSON(needs) }}
+          required: '["cross-project-contracts", "rust-core"]'
