@@ -24,7 +24,7 @@ tempfile = "3.23.0"
 # Visible-text producer (#33): visual-analysis OCR backends, the scene-aware OCR sampling
 # path (video-analysis-ingest feature `ocr`) and text tracking, all at the scene producer's
 # revision. Only `media-intelligence-analysis`'s opt-in `visual-analysis-ocr` feature uses them.
-image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
+image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "35a53204cea66e7f438b962afe23b6cef1de0004" }
 image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
 video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
 video-analysis-recognition = { package = "moenarch-video-analysis-recognition", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
