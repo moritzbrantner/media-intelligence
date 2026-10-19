@@ -35,6 +35,32 @@ Running real producers on a video is [#27](https://github.com/moritzbrantner/med
 
 A modular, microservice-based platform for ingesting, transcribing, analyzing, and indexing media from multiple sources — YouTube, X/Twitter, Substack, PDFs, plain text, and more — with the goal of building rich, searchable profiles of people, organizations, and channels.
 
+### Downstream Rust source consumption
+
+Use an immutable public Git revision of `media-intelligence-analysis` for source
+integration. Enabling `visual-analysis-ocr` currently also needs the unpublished
+Foundation semantic primitive. Cargo does not inherit a dependency workspace's
+`[patch.crates-io]`, so the consuming Cargo root must declare this one override:
+
+```toml
+[dependencies]
+media-intelligence-analysis = { git = "https://github.com/moritzbrantner/media-intelligence", rev = "c9206895de086b9716c3232edeeb9fc10306600f", features = ["visual-analysis-ocr"] }
+
+[patch.crates-io]
+moenarch-semantic-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
+```
+
+The other workspace patches are not part of the downstream requirement. This is
+an exact source contract, not a claim that these packages are published or that
+model-backed OCR acceptance has run. No sibling checkout, credentials, model
+download or registry publication is needed to compile the OCR facade.
+
+Run `bash scripts/check-downstream-ocr-consumer.sh` to verify a clean Git consumer
+of the current commit with this minimal override. It creates a disposable crate,
+fetches dependencies explicitly, then compiles the real `analyze` and OCR adapter
+exports offline with a lockfile. CI runs this check in addition to workspace
+checks, which alone cannot prove downstream patch behavior.
+
 ## What It Does
 
 - **Ingest** media from YouTube, X/Twitter, Substack, RSS, PDFs, and plain text

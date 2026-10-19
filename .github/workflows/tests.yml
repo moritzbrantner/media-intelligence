@@ -54,6 +54,9 @@ jobs:
           cargo clippy --locked -p media-intelligence-analysis --all-targets --features visual-analysis-ocr -- -D warnings
           cargo test --locked -p media-intelligence-analysis --features visual-analysis-ocr 2>&1 | tee -a test.log
 
+      - name: Check clean downstream OCR consumer
+        run: bash scripts/check-downstream-ocr-consumer.sh
+
       - name: Require real scene-producer execution
         run: "! grep -q SKIPPED test.log"
 
