@@ -15,7 +15,7 @@ sha2 = "0.11.0"
 # Neutral Foundation contracts, pinned to an exact public revision (owner rule 2026-10-10:
 # exact-rev git dependencies, no crates.io publishes, no path dependencies).
 moenarch-corpus-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "8255347717ca7b8943ede7c435d0c468e5a107c5" }
-moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
+moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "49d8a7ddffeded688b717a00e11bcff001d520ae" }
 # Canonical scene producer (#27): visual-analysis at an exact public revision. Detection
 # itself is scenedetect-core, reached only through these crates.
 video-analysis-ffmpeg = { package = "moenarch-video-analysis-ffmpeg", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
