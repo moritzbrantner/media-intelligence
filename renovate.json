@@ -3,5 +3,13 @@
   "extends": [
     "github>moritzbrantner/coding-agent-conventions"
   ],
-  "platformAutomerge": true
+  "platformAutomerge": true,
+  "packageRules": [
+    {
+      "description": "Git-pinned capability crates must move together: one crate of visual-analysis, audio-analysis or moenarch-foundation at a newer revision than its siblings duplicates shared types and breaks the build.",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["digest"],
+      "groupName": "git-pinned capability revisions"
+    }
+  ]
 }

@@ -18,23 +18,23 @@ moenarch-corpus-core = { git = "https://github.com/moritzbrantner/moenarch-found
 moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
 # Canonical scene producer (#27): visual-analysis at an exact public revision. Detection
 # itself is scenedetect-core, reached only through these crates.
-video-analysis-ffmpeg = { package = "moenarch-video-analysis-ffmpeg", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
-video-analysis-ingest = { package = "moenarch-video-analysis-ingest", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
+video-analysis-ffmpeg = { package = "moenarch-video-analysis-ffmpeg", git = "https://github.com/moritzbrantner/visual-analysis", rev = "35a53204cea66e7f438b962afe23b6cef1de0004" }
+video-analysis-ingest = { package = "moenarch-video-analysis-ingest", git = "https://github.com/moritzbrantner/visual-analysis", rev = "35a53204cea66e7f438b962afe23b6cef1de0004" }
 tempfile = "3.23.0"
 # Visible-text producer (#33): visual-analysis OCR backends, the scene-aware OCR sampling
 # path (video-analysis-ingest feature `ocr`) and text tracking, all at the scene producer's
 # revision. Only `media-intelligence-analysis`'s opt-in `visual-analysis-ocr` feature uses them.
-image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
-image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
-video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
-video-analysis-recognition = { package = "moenarch-video-analysis-recognition", git = "https://github.com/moritzbrantner/visual-analysis", rev = "f73969447916e5ac47f4559fc51ab47552f4f734" }
+image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "35a53204cea66e7f438b962afe23b6cef1de0004" }
+image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "35a53204cea66e7f438b962afe23b6cef1de0004" }
+video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "35a53204cea66e7f438b962afe23b6cef1de0004" }
+video-analysis-recognition = { package = "moenarch-video-analysis-recognition", git = "https://github.com/moritzbrantner/visual-analysis", rev = "35a53204cea66e7f438b962afe23b6cef1de0004" }
 num-rational = "0.4.2"
 # Canonical speech producer (#32): audio-analysis transcription at an exact public revision.
 # Only `media-intelligence-analysis`'s opt-in `audio-analysis` feature uses it. ASR,
 # model resolution and decoding stay inside audio-analysis.
 audio-analysis-transcription = { package = "moenarch-audio-analysis-transcription", git = "https://github.com/moritzbrantner/audio-analysis", rev = "15ca9b157d4437b58b5cd1820a773c5f4a275014", default-features = false }
 
-# visual-analysis (115c1f0, now f739694) declares registry requirements on Foundation crates (its own
+# visual-analysis (115c1f0, now 35a5320) declares registry requirements on Foundation crates (its own
 # source-deps file names foundation b7533cd). These patches resolve them to the one
 # Foundation revision this workspace already pins (b0e26e4, a descendant of b7533cd with
 # identical crate versions), so the graph holds a single copy of each Foundation crate.
