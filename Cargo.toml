@@ -47,7 +47,10 @@ moenarch-corpus-core = { git = "https://github.com/moritzbrantner/moenarch-found
 moenarch-math-geometry-2d = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
 moenarch-math-signal-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
 moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
-moenarch-model-runtime = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
+# model-runtime stays at audio-analysis' declared Foundation revision (fb51ab4, a descendant
+# of visual-analysis' b7533cd): b0e26e4 added `ModelRuntimeError::Cancelled`, which
+# image-analysis-ocr's `local-onnx` code at the pinned visual-analysis revision does not match.
+moenarch-model-runtime = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "fb51ab465ecd4d8086ac37ad0a9a2268b570e09f" }
 moenarch-runtime-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
 moenarch-tensor-data = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
 moenarch-runtime-onnx = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9" }
