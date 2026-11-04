@@ -65,13 +65,16 @@ pub mod speech;
 #[cfg(feature = "visual-analysis-ocr")]
 pub mod visible_text;
 
+pub use media_intelligence_core::exact_timing::{
+    ExactAnchorTimingV1, ExactAnchorV1, ExactTimingError, ExactTimingSidecarV1,
+};
 pub use media_intelligence_core::{
     AssetId, CompositionError, ContentHash, EvidenceAnalysis, MediaIdentity, Modality,
     ProducerReceipt, SceneRun, SpeechRun, VisibleTextRun,
 };
 
 /// Exact `visual-analysis` revision whose scene path this crate invokes.
-pub const VISUAL_ANALYSIS_REVISION: &str = "f73969447916e5ac47f4559fc51ab47552f4f734";
+pub const VISUAL_ANALYSIS_REVISION: &str = "ef820b3c0f0b0c5306274f484c1d26582bd655c4";
 /// Producer name written into scene receipts.
 pub const SCENE_PRODUCER: &str = "visual-analysis";
 /// Model (algorithm) name written into scene receipts.
@@ -137,6 +140,16 @@ impl SceneConfig {
             model_version: SCENE_MODEL_VERSION.to_string(),
             config_hash: self.config_hash(),
         }
+    }
+
+    /// Separate cache identity: an ordinary seconds-only scene run cannot be
+    /// reused as if it had original source timestamps attached.
+    fn exact_producer_identity(&self) -> ProducerIdentity {
+        let mut identity = self.producer_identity();
+        identity.config_hash = execution::sha256_prefixed(
+            format!("{};source-pts=ffprobe-frame-v1", identity.config_hash).as_bytes(),
+        );
+        identity
     }
 }
 
@@ -302,6 +315,12 @@ pub enum CachedStage {
     Speech(SpeechRun),
     VisibleText(VisibleTextRun),
     Scenes(SceneRun),
+    /// Original source PTS captured in the same scene-decoding pass. This is
+    /// never substituted for the legacy `Scenes` variant or vice versa.
+    ExactScenes {
+        run: SceneRun,
+        anchors: Vec<ExactAnchorV1>,
+    },
 }
 
 /// Caller-owned storage of stage results. The caller decides where and how long results
@@ -416,6 +435,17 @@ pub struct AnalysisReport {
     pub analysis: EvidenceAnalysis,
 }
 
+/// Opt-in result with the existing byte-compatible v1 analysis and a separately
+/// validated exact scene sidecar. Other modalities remain seconds-only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExactSceneAnalysisReport {
+    pub legacy: AnalysisReport,
+    /// `None` when the scene stage was not requested, failed, or emitted no scenes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exact_timing: Option<ExactTimingSidecarV1>,
+}
+
 impl AnalysisReport {
     /// The status of `modality`.
     pub fn status(&self, modality: Modality) -> &StageStatus {
@@ -448,6 +478,8 @@ pub enum AnalysisError {
     InvalidSceneConfig { reason: String },
     /// The stage runs could not be composed.
     Composition(CompositionError),
+    /// The source PTS disagree with the composed v1 scene projections.
+    ExactTiming(ExactTimingError),
 }
 
 impl std::fmt::Display for AnalysisError {
@@ -471,4 +503,16 @@ pub fn analyze(
     cancellation: &CancellationToken,
 ) -> Result<AnalysisReport, AnalysisError> {
     execution::analyze(request, producers, cache, cancellation)
+}
+
+/// Preserve the original Foundation frame PTS/timebase from the same canonical
+/// Visual Analysis scene decode. The legacy report remains ordinary v1; this
+/// mode has a distinct cache identity and rejects unmapped source clock origins.
+pub fn analyze_with_exact_scene_timing(
+    request: &AnalysisRequest,
+    producers: &Producers<'_>,
+    cache: &mut dyn StageCache,
+    cancellation: &CancellationToken,
+) -> Result<ExactSceneAnalysisReport, AnalysisError> {
+    execution::analyze_with_exact_scene_timing(request, producers, cache, cancellation)
 }

@@ -6,18 +6,21 @@ use std::fs::{File, Metadata};
 use std::io::Read;
 use std::path::Path;
 
+use media_intelligence_core::exact_timing::{
+    ExactAnchorTimingV1, ExactAnchorV1, ExactTimingSidecarV1,
+};
 use media_intelligence_core::{
     compose, CompositionInput, ModalityInput, SceneInterval, SceneRun, SpeechRun, VisibleTextRun,
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use video_analysis_ffmpeg::FfmpegVideoSource;
+use video_analysis_ffmpeg::{FfmpegSourceOptions, FfmpegVideoSource};
 
 use crate::{
     input_hash, scene_bound_identity, AnalysisError, AnalysisReport, AnalysisRequest, CachedStage,
-    CancellationToken, ContentHash, MediaIdentity, Modality, ProducerError, ProducerIdentity,
-    ProducerInput, ProducerReceipt, Producers, SceneConfig, StageCache, StageKey, StageStatus,
-    VISUAL_ANALYSIS_REVISION,
+    CancellationToken, ContentHash, ExactSceneAnalysisReport, MediaIdentity, Modality,
+    ProducerError, ProducerIdentity, ProducerInput, ProducerReceipt, Producers, SceneConfig,
+    StageCache, StageKey, StageStatus, VISUAL_ANALYSIS_REVISION,
 };
 
 pub(crate) fn sha256_prefixed(bytes: &[u8]) -> String {
@@ -98,6 +101,28 @@ enum Stage<R> {
     },
 }
 
+#[derive(Clone)]
+struct SceneStageRun {
+    run: SceneRun,
+    original_pts: Option<Vec<ExactAnchorV1>>,
+}
+
+fn scene_input(stage: &Stage<SceneStageRun>) -> ModalityInput<SceneRun> {
+    // Only clone the legacy run: original PTS can be large and is handed off
+    // separately, never copied into the seconds-only composition payload.
+    match stage {
+        Stage::NotRequested => ModalityInput::NotRequested,
+        Stage::Unavailable | Stage::Cancelled => ModalityInput::Unprocessed,
+        Stage::Failed { receipt, reason } => ModalityInput::Failed {
+            receipt: receipt.clone(),
+            reason: reason.clone(),
+        },
+        Stage::Completed { run, .. } => ModalityInput::Completed {
+            runs: vec![run.run.clone()],
+        },
+    }
+}
+
 impl<R: Clone> Stage<R> {
     fn input(&self) -> ModalityInput<R> {
         match self {
@@ -151,6 +176,25 @@ pub(crate) fn analyze(
     cache: &mut dyn StageCache,
     cancellation: &CancellationToken,
 ) -> Result<AnalysisReport, AnalysisError> {
+    analyze_internal(request, producers, cache, cancellation, false).map(|result| result.legacy)
+}
+
+pub(crate) fn analyze_with_exact_scene_timing(
+    request: &AnalysisRequest,
+    producers: &Producers<'_>,
+    cache: &mut dyn StageCache,
+    cancellation: &CancellationToken,
+) -> Result<ExactSceneAnalysisReport, AnalysisError> {
+    analyze_internal(request, producers, cache, cancellation, true)
+}
+
+fn analyze_internal(
+    request: &AnalysisRequest,
+    producers: &Producers<'_>,
+    cache: &mut dyn StageCache,
+    cancellation: &CancellationToken,
+    original_pts: bool,
+) -> Result<ExactSceneAnalysisReport, AnalysisError> {
     let path = request.media_path.as_path();
     if regular_file_metadata(path).is_none() {
         return Err(AnalysisError::MediaMissing {
@@ -209,23 +253,40 @@ pub(crate) fn analyze(
             &context,
             cache,
             Modality::Scene,
-            config.producer_identity(),
-            |run: &SceneRun| &run.receipt,
-            CachedStage::Scenes,
-            |cached| match cached {
-                CachedStage::Scenes(run) => Some(run),
+            if original_pts {
+                config.exact_producer_identity()
+            } else {
+                config.producer_identity()
+            },
+            |result: &SceneStageRun| &result.run.receipt,
+            |result| match result.original_pts {
+                Some(anchors) => CachedStage::ExactScenes {
+                    run: result.run,
+                    anchors,
+                },
+                None => CachedStage::Scenes(result.run),
+            },
+            |cached| match (original_pts, cached) {
+                (true, CachedStage::ExactScenes { run, anchors }) => Some(SceneStageRun {
+                    run,
+                    original_pts: Some(anchors),
+                }),
+                (false, CachedStage::Scenes(run)) => Some(SceneStageRun {
+                    run,
+                    original_pts: None,
+                }),
                 _ => None,
             },
             None,
             None,
-            |input| detect_scenes(input, config),
+            |input| detect_scenes(input, config, original_pts),
         ),
     };
 
     // Visible text runs after scenes so that a scene-dependent producer (#33) can sample
     // the scene intervals of this same analysis.
     let scene_run = match &scenes {
-        Stage::Completed { run, .. } => Some(run),
+        Stage::Completed { run, .. } => Some(&run.run),
         _ => None,
     };
     let visible_text = match (request.profile.visible_text, producers.visible_text) {
@@ -270,13 +331,36 @@ pub(crate) fn analyze(
             |input| producer.run(input),
         ),
     };
-    let analysis = compose(&CompositionInput {
+    let composition = CompositionInput {
         media: request.media.clone(),
         speech: speech.input(),
         visible_text: visible_text.input(),
-        scenes: scenes.input(),
-    })
-    .map_err(AnalysisError::Composition)?;
+        scenes: scene_input(&scenes),
+    };
+    let analysis = compose(&composition).map_err(AnalysisError::Composition)?;
+    let exact_timing = match &scenes {
+        Stage::Completed {
+            run:
+                SceneStageRun {
+                    original_pts: Some(anchors),
+                    ..
+                },
+            ..
+        } if !anchors.is_empty() => {
+            let sidecar = ExactTimingSidecarV1::new(
+                request.media.clone(),
+                None,
+                vec![Modality::Scene],
+                anchors.clone(),
+            )
+            .map_err(AnalysisError::ExactTiming)?;
+            sidecar
+                .validate_for(&composition)
+                .map_err(AnalysisError::ExactTiming)?;
+            Some(sidecar)
+        }
+        _ => None,
+    };
     let count = |modality: Modality| {
         analysis
             .evidence
@@ -285,11 +369,14 @@ pub(crate) fn analyze(
             .count()
     };
 
-    Ok(AnalysisReport {
-        speech: speech.status(|run| &run.receipt, count(Modality::Speech)),
-        visible_text: visible_text.status(|run| &run.receipt, count(Modality::VisibleText)),
-        scenes: scenes.status(|run| &run.receipt, count(Modality::Scene)),
-        analysis,
+    Ok(ExactSceneAnalysisReport {
+        legacy: AnalysisReport {
+            speech: speech.status(|run| &run.receipt, count(Modality::Speech)),
+            visible_text: visible_text.status(|run| &run.receipt, count(Modality::VisibleText)),
+            scenes: scenes.status(|run| &run.run.receipt, count(Modality::Scene)),
+            analysis,
+        },
+        exact_timing,
     })
 }
 
@@ -431,18 +518,45 @@ fn validate_run<R: Clone>(
     {
         return Err(reason);
     }
-    if let (Some(scenes), CachedStage::VisibleText(text)) = (required_scenes, wrap(run.clone())) {
-        if let Some(reason) = observation_outside_scenes(&text, scenes) {
+    let cached = wrap(run.clone());
+    if let (Some(scenes), CachedStage::VisibleText(text)) = (required_scenes, &cached) {
+        if let Some(reason) = observation_outside_scenes(text, scenes) {
             return Err(reason);
         }
     }
-    compose(&single_stage_input(
-        context.media,
-        modality,
-        &wrap(run.clone()),
-    ))
-    .map(|_| ())
-    .map_err(|error| format!("producer run is not composable: {error}"))
+    let input = single_stage_input(context.media, modality, &cached);
+    compose(&input).map_err(|error| format!("producer run is not composable: {error}"))?;
+    if let CachedStage::ExactScenes { run, anchors } = &cached {
+        if run.scenes.is_empty() {
+            return if anchors.is_empty() {
+                Ok(())
+            } else {
+                Err("empty scene run claims original PTS anchors".into())
+            };
+        }
+        let Some(first) = run.scenes.first() else {
+            return Err("exact scene run is empty".into());
+        };
+        let has_media_origin = anchors.iter().any(|anchor| {
+            anchor.record_id == first.id
+                && matches!(
+                    anchor.timing,
+                    ExactAnchorTimingV1::Range { start, .. } if start.pts == 0
+                )
+        });
+        if !has_media_origin {
+            return Err("exact scene clock has no verified media-relative zero origin".into());
+        }
+        ExactTimingSidecarV1::new(
+            context.media.clone(),
+            None,
+            vec![Modality::Scene],
+            anchors.clone(),
+        )
+        .and_then(|sidecar| sidecar.validate_for(&input))
+        .map_err(|error| format!("cached exact PTS is invalid: {error}"))?;
+    }
+    Ok(())
 }
 
 /// A scene-dependent run claims its frames were sampled from `scenes`; reject one (fresh
@@ -492,7 +606,8 @@ fn single_stage_input(
                 runs: vec![run.clone()],
             }
         }
-        (Modality::Scene, CachedStage::Scenes(run)) => {
+        (Modality::Scene, CachedStage::Scenes(run))
+        | (Modality::Scene, CachedStage::ExactScenes { run, .. }) => {
             input.scenes = ModalityInput::Completed {
                 runs: vec![run.clone()],
             }
@@ -557,12 +672,20 @@ fn receipt_mismatch(
 fn detect_scenes(
     input: &ProducerInput<'_>,
     config: &SceneConfig,
-) -> Result<SceneRun, ProducerError> {
+    original_pts: bool,
+) -> Result<SceneStageRun, ProducerError> {
     let failed = |stage: &str, error: &dyn std::fmt::Display| ProducerError::Failed {
         reason: format!("visual-analysis {stage} failed: {error}"),
     };
-    let mut source =
-        FfmpegVideoSource::open(input.media_path).map_err(|error| failed("video open", &error))?;
+    let mut source = if original_pts {
+        FfmpegVideoSource::open_path_with_exact_frame_pts(
+            input.media_path,
+            FfmpegSourceOptions::recorded(),
+        )
+    } else {
+        FfmpegVideoSource::open(input.media_path)
+    }
+    .map_err(|error| failed("video open", &error))?;
     let result = video_analysis_ingest::surface::detect_content_scenes(
         &mut source,
         config.threshold,
@@ -570,6 +693,18 @@ fn detect_scenes(
     )
     .map_err(|error| failed("scene detection", &error))?;
     drop(source);
+
+    if original_pts
+        && result
+            .scenes
+            .first()
+            .is_some_and(|scene| scene.start.timestamp.pts != 0)
+    {
+        return Err(ProducerError::Failed {
+            reason: "source first-frame PTS is nonzero; an exact media-relative clock mapping is required"
+                .into(),
+        });
+    }
 
     let scenes = result
         .scenes
@@ -584,18 +719,45 @@ fn detect_scenes(
             end_frame: Some(scene.end.frame_index),
         })
         .collect();
-    let identity = config.producer_identity();
-    Ok(SceneRun {
-        receipt: ProducerReceipt {
-            config: Some(json!({
-                "adapter": "video-analysis-ingest.detect_content_scenes",
-                "threshold": config.threshold,
-                "minSceneLen": config.min_scene_len,
-                "visualAnalysisRevision": VISUAL_ANALYSIS_REVISION,
-            })),
-            ..attempted_receipt(Modality::Scene, &identity, input.input_hash)
-        },
-        scenes,
+    let identity = if original_pts {
+        config.exact_producer_identity()
+    } else {
+        config.producer_identity()
+    };
+    let mut recorded_config = json!({
+        "adapter": "video-analysis-ingest.detect_content_scenes",
+        "threshold": config.threshold,
+        "minSceneLen": config.min_scene_len,
+        "visualAnalysisRevision": VISUAL_ANALYSIS_REVISION,
+    });
+    if original_pts {
+        recorded_config["sourcePts"] = json!("ffprobe-frame-v1");
+    }
+    let receipt = ProducerReceipt {
+        config: Some(recorded_config),
+        ..attempted_receipt(Modality::Scene, &identity, input.input_hash)
+    };
+    let anchors = original_pts.then(|| {
+        result
+            .scenes
+            .iter()
+            .enumerate()
+            .map(|(index, scene)| ExactAnchorV1 {
+                receipt: receipt.clone(),
+                record_id: format!("scene-{index}"),
+                timing: ExactAnchorTimingV1::Range {
+                    start: scene.start.timestamp,
+                    end: scene.end.timestamp,
+                },
+                frame_index: None,
+                start_frame: Some(scene.start.frame_index),
+                end_frame: Some(scene.end.frame_index),
+            })
+            .collect()
+    });
+    Ok(SceneStageRun {
+        run: SceneRun { receipt, scenes },
+        original_pts: anchors,
     })
 }
 

@@ -50,7 +50,7 @@ fn assert_sha256(hash: &str) {
 fn constants_name_the_pinned_revision_and_backend_kinds() {
     assert_eq!(
         VISUAL_ANALYSIS_REVISION,
-        "f73969447916e5ac47f4559fc51ab47552f4f734"
+        "ef820b3c0f0b0c5306274f484c1d26582bd655c4"
     );
     assert_eq!(OCR_PRODUCER_PREFIX, "visual-analysis");
     assert_eq!(ONNX_TROCR_KIND, "onnx-trocr");
