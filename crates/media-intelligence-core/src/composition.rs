@@ -765,8 +765,16 @@ mod tests {
         let mut found = BTreeSet::new();
         for (kind, subject_modality, object_modality) in [
             (RelationKind::SceneSpeech, Modality::Scene, Modality::Speech),
-            (RelationKind::SceneVisibleText, Modality::Scene, Modality::VisibleText),
-            (RelationKind::SpeechVisibleTextCooccurrence, Modality::Speech, Modality::VisibleText),
+            (
+                RelationKind::SceneVisibleText,
+                Modality::Scene,
+                Modality::VisibleText,
+            ),
+            (
+                RelationKind::SpeechVisibleTextCooccurrence,
+                Modality::Speech,
+                Modality::VisibleText,
+            ),
         ] {
             for subject in evidence.iter().filter(|e| e.modality == subject_modality) {
                 for object in evidence.iter().filter(|e| e.modality == object_modality) {
@@ -788,9 +796,7 @@ mod tests {
         let mut seed = 53_u64;
         let mut evidence = Vec::new();
         for id in 0..180 {
-            seed = seed
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1);
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
             let start = ((seed >> 32) % 25) as f64 / 2.0;
             let end = if seed & 7 == 0 {
                 start
@@ -813,7 +819,12 @@ mod tests {
         for id in 0..300 {
             let time = id as f64 * 10.0;
             evidence.push(synthetic_item(id * 3, Modality::Scene, time, time + 1.0));
-            evidence.push(synthetic_item(id * 3 + 1, Modality::Speech, time + 4.0, time + 5.0));
+            evidence.push(synthetic_item(
+                id * 3 + 1,
+                Modality::Speech,
+                time + 4.0,
+                time + 5.0,
+            ));
             evidence.push(synthetic_item(
                 id * 3 + 2,
                 Modality::VisibleText,
