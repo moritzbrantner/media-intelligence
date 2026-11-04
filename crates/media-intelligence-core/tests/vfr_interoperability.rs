@@ -61,9 +61,12 @@ fn vfr_pts_and_cut_remain_exact_across_timebases() {
     assert!(second.contains(cut).unwrap());
     assert!(first.contains(stamps[3]).unwrap());
     assert!(second.contains(stamps[4]).unwrap());
-    assert!(cut.same_instant(moenarch_media_core::Timestamp::new(
-        1, moenarch_media_core::Timebase::new(1, 5)
-    )).unwrap());
+    assert!(cut
+        .same_instant(moenarch_media_core::Timestamp::new(
+            1,
+            moenarch_media_core::Timebase::new(1, 5)
+        ))
+        .unwrap());
 
     // Reject precision-lossy JSON numbers even when they fit the i64 range.
     let unsafe_pts = serde_json::json!({
@@ -142,7 +145,10 @@ fn youtube_v1_and_speech_preserve_source_receipts_and_cut_semantics() {
     input.speech = ModalityInput::Completed { runs: vec![speech] };
     let analysis = compose(&input).unwrap();
     assert_eq!(analysis.media, media);
-    assert_eq!(serde_json::from_slice::<Value>(&serialized(&analysis)).unwrap()["schemaVersion"], 1);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&serialized(&analysis)).unwrap()["schemaVersion"],
+        1
+    );
     assert_eq!(serialized(&analysis), serialized(&compose(&input).unwrap()));
     for modality in [Modality::Scene, Modality::Speech, Modality::VisibleText] {
         assert!(matches!(
@@ -159,20 +165,50 @@ fn youtube_v1_and_speech_preserve_source_receipts_and_cut_semantics() {
             "sha256:aa3adcebd323985cf4b77704b150c70188714fd5476d9e86c1a4c9fd84b1a63a"
         );
     }
-    assert_eq!(item(&analysis, "obs:vfr-ocr-cut").start_seconds, cut.seconds());
+    assert_eq!(
+        item(&analysis, "obs:vfr-ocr-cut").start_seconds,
+        cut.seconds()
+    );
     assert_eq!(item(&analysis, "scene:vfr-sc-0").end_seconds, cut.seconds());
-    assert_eq!(item(&analysis, "scene:vfr-sc-1").start_seconds, cut.seconds());
+    assert_eq!(
+        item(&analysis, "scene:vfr-sc-1").start_seconds,
+        cut.seconds()
+    );
 
     let relations = labelled_relations(&analysis);
     assert_eq!(
         relations,
         BTreeSet::from([
-            (RelationKind::SceneSpeech, "scene:vfr-sc-0".into(), "speech:0".into()),
-            (RelationKind::SceneSpeech, "scene:vfr-sc-1".into(), "speech:1".into()),
-            (RelationKind::SceneVisibleText, "scene:vfr-sc-0".into(), "obs:vfr-ocr-before".into()),
-            (RelationKind::SceneVisibleText, "scene:vfr-sc-1".into(), "obs:vfr-ocr-cut".into()),
-            (RelationKind::SpeechVisibleTextCooccurrence, "speech:0".into(), "obs:vfr-ocr-before".into()),
-            (RelationKind::SpeechVisibleTextCooccurrence, "speech:1".into(), "obs:vfr-ocr-cut".into()),
+            (
+                RelationKind::SceneSpeech,
+                "scene:vfr-sc-0".into(),
+                "speech:0".into()
+            ),
+            (
+                RelationKind::SceneSpeech,
+                "scene:vfr-sc-1".into(),
+                "speech:1".into()
+            ),
+            (
+                RelationKind::SceneVisibleText,
+                "scene:vfr-sc-0".into(),
+                "obs:vfr-ocr-before".into()
+            ),
+            (
+                RelationKind::SceneVisibleText,
+                "scene:vfr-sc-1".into(),
+                "obs:vfr-ocr-cut".into()
+            ),
+            (
+                RelationKind::SpeechVisibleTextCooccurrence,
+                "speech:0".into(),
+                "obs:vfr-ocr-before".into()
+            ),
+            (
+                RelationKind::SpeechVisibleTextCooccurrence,
+                "speech:1".into(),
+                "obs:vfr-ocr-cut".into()
+            ),
         ])
     );
 }
