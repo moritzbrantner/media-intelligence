@@ -499,34 +499,121 @@ fn overlaps(a: &EvidenceItem, b: &EvidenceItem) -> bool {
     }
 }
 
+/// An interval index over caller-owned evidence. Each node records the latest
+/// endpoint in its subtree; disjoint histories are pruned without visiting
+/// every older interval. Point/half-open semantics stay in `overlaps`.
+struct RelationIntervalIndex<'a> {
+    items: Vec<&'a EvidenceItem>,
+    max_end: Vec<f64>,
+}
+
+impl<'a> RelationIntervalIndex<'a> {
+    fn new(items: &[&'a EvidenceItem]) -> Self {
+        let mut items = items.to_vec();
+        items.sort_by(|a, b| timeline_order(a, b));
+        let mut index = Self {
+            max_end: vec![f64::NEG_INFINITY; items.len().saturating_mul(4).max(1)],
+            items,
+        };
+        if !index.items.is_empty() {
+            index.build(1, 0, index.items.len());
+        }
+        index
+    }
+
+    fn build(&mut self, node: usize, first: usize, last: usize) -> f64 {
+        if last - first == 1 {
+            let end = self.items[first].end_seconds;
+            self.max_end[node] = end;
+            return end;
+        }
+        let mid = first + (last - first) / 2;
+        let left = self.build(node * 2, first, mid);
+        let right = self.build(node * 2 + 1, mid, last);
+        self.max_end[node] = left.max(right);
+        self.max_end[node]
+    }
+
+    fn for_overlaps(
+        &self,
+        subject: &EvidenceItem,
+        work: &mut RelationWork,
+        mut visit: impl FnMut(&EvidenceItem),
+    ) {
+        if !self.items.is_empty() {
+            self.query(1, 0, self.items.len(), subject, work, &mut visit);
+        }
+    }
+
+    fn query(
+        &self,
+        node: usize,
+        first: usize,
+        last: usize,
+        subject: &EvidenceItem,
+        work: &mut RelationWork,
+        visit: &mut impl FnMut(&EvidenceItem),
+    ) {
+        let is_point = subject.start_seconds == subject.end_seconds;
+        let starts_too_late = if is_point {
+            self.items[first].start_seconds > subject.end_seconds
+        } else {
+            self.items[first].start_seconds >= subject.end_seconds
+        };
+        if starts_too_late || self.max_end[node] < subject.start_seconds {
+            return;
+        }
+        if last - first == 1 {
+            work.exact_checks += 1;
+            let candidate = self.items[first];
+            if overlaps(subject, candidate) {
+                visit(candidate);
+            }
+            return;
+        }
+        let mid = first + (last - first) / 2;
+        self.query(node * 2, first, mid, subject, work, visit);
+        self.query(node * 2 + 1, mid, last, subject, work, visit);
+    }
+}
+
+#[derive(Default)]
+struct RelationWork {
+    exact_checks: usize,
+}
+
 fn relations(evidence: &[EvidenceItem]) -> Vec<EvidenceRelation> {
+    relations_indexed(evidence, &mut RelationWork::default())
+}
+
+fn relations_indexed(evidence: &[EvidenceItem], work: &mut RelationWork) -> Vec<EvidenceRelation> {
     let of = |modality: Modality| -> Vec<&EvidenceItem> {
         evidence.iter().filter(|e| e.modality == modality).collect()
     };
     let speech = of(Modality::Speech);
     let visible_text = of(Modality::VisibleText);
     let scenes = of(Modality::Scene);
+    let speech_index = RelationIntervalIndex::new(&speech);
+    let text_index = RelationIntervalIndex::new(&visible_text);
 
     let mut relations = BTreeSet::new();
-    let mut relate = |kind, subjects: &[&EvidenceItem], objects: &[&EvidenceItem]| {
+    let mut relate = |kind, subjects: &[&EvidenceItem], index: &RelationIntervalIndex<'_>| {
         for subject in subjects {
-            for object in objects {
-                if overlaps(subject, object) {
-                    relations.insert(EvidenceRelation {
-                        kind,
-                        subject: subject.id.clone(),
-                        object: object.id.clone(),
-                    });
-                }
-            }
+            index.for_overlaps(subject, work, |object| {
+                relations.insert(EvidenceRelation {
+                    kind,
+                    subject: subject.id.clone(),
+                    object: object.id.clone(),
+                });
+            });
         }
     };
-    relate(RelationKind::SceneSpeech, &scenes, &speech);
-    relate(RelationKind::SceneVisibleText, &scenes, &visible_text);
+    relate(RelationKind::SceneSpeech, &scenes, &speech_index);
+    relate(RelationKind::SceneVisibleText, &scenes, &text_index);
     relate(
         RelationKind::SpeechVisibleTextCooccurrence,
         &speech,
-        &visible_text,
+        &text_index,
     );
     relations.into_iter().collect()
 }
@@ -650,5 +737,116 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(ids(&first), ids(&second));
+    }
+
+    fn synthetic_item(id: usize, modality: Modality, start: f64, end: f64) -> EvidenceItem {
+        let media = MediaIdentity {
+            asset_id: AssetId::new("synthetic").unwrap(),
+            content_hash: ContentHash::from_bytes(b"synthetic"),
+            duration_seconds: None,
+        };
+        item(
+            &media,
+            &receipt(modality),
+            format!("evidence:{id}"),
+            start,
+            end,
+            EvidenceContent::Speech(SpeechEvidence {
+                segment_index: id as u64,
+                text: String::new(),
+                language: None,
+                speaker: None,
+                transcript_confidence: None,
+            }),
+        )
+    }
+
+    fn pairwise_relations(evidence: &[EvidenceItem]) -> Vec<EvidenceRelation> {
+        let mut found = BTreeSet::new();
+        for (kind, subject_modality, object_modality) in [
+            (RelationKind::SceneSpeech, Modality::Scene, Modality::Speech),
+            (RelationKind::SceneVisibleText, Modality::Scene, Modality::VisibleText),
+            (RelationKind::SpeechVisibleTextCooccurrence, Modality::Speech, Modality::VisibleText),
+        ] {
+            for subject in evidence.iter().filter(|e| e.modality == subject_modality) {
+                for object in evidence.iter().filter(|e| e.modality == object_modality) {
+                    if overlaps(subject, object) {
+                        found.insert(EvidenceRelation {
+                            kind,
+                            subject: subject.id.clone(),
+                            object: object.id.clone(),
+                        });
+                    }
+                }
+            }
+        }
+        found.into_iter().collect()
+    }
+
+    #[test]
+    fn indexed_relations_match_pairwise_oracle_for_points_and_touching_boundaries() {
+        let mut seed = 53_u64;
+        let mut evidence = Vec::new();
+        for id in 0..180 {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            let start = ((seed >> 32) % 25) as f64 / 2.0;
+            let end = if seed & 7 == 0 {
+                start
+            } else {
+                start + ((seed >> 7) % 5 + 1) as f64 / 2.0
+            };
+            let modality = match id % 3 {
+                0 => Modality::Scene,
+                1 => Modality::Speech,
+                _ => Modality::VisibleText,
+            };
+            evidence.push(synthetic_item(id, modality, start, end));
+        }
+        assert_eq!(relations(&evidence), pairwise_relations(&evidence));
+    }
+
+    #[test]
+    fn indexed_relations_prune_sparse_disjoint_histories() {
+        let mut evidence = Vec::new();
+        for id in 0..300 {
+            let time = id as f64 * 10.0;
+            evidence.push(synthetic_item(id * 3, Modality::Scene, time, time + 1.0));
+            evidence.push(synthetic_item(id * 3 + 1, Modality::Speech, time + 4.0, time + 5.0));
+            evidence.push(synthetic_item(
+                id * 3 + 2,
+                Modality::VisibleText,
+                time + 7.0,
+                time + 7.0,
+            ));
+        }
+        let mut work = RelationWork::default();
+        let indexed = relations_indexed(&evidence, &mut work);
+        assert_eq!(indexed, pairwise_relations(&evidence));
+        assert!(indexed.is_empty());
+        assert!(
+            work.exact_checks < 1_000,
+            "{} exact checks versus 270,000 quadratic pairs",
+            work.exact_checks
+        );
+    }
+
+    #[test]
+    fn dense_relations_preserve_output_sized_work_and_sort_order() {
+        let mut evidence = Vec::new();
+        for id in 0..100 {
+            for (offset, modality) in [Modality::Scene, Modality::Speech, Modality::VisibleText]
+                .into_iter()
+                .enumerate()
+            {
+                evidence.push(synthetic_item(id * 3 + offset, modality, 1.0, 3.0));
+            }
+        }
+        let mut work = RelationWork::default();
+        let indexed = relations_indexed(&evidence, &mut work);
+        assert_eq!(indexed, pairwise_relations(&evidence));
+        assert_eq!(indexed.len(), 30_000);
+        assert!(work.exact_checks >= indexed.len());
     }
 }
