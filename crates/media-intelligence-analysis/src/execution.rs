@@ -737,24 +737,41 @@ fn detect_scenes(
         config: Some(recorded_config),
         ..attempted_receipt(Modality::Scene, &identity, input.input_hash)
     };
-    let anchors = original_pts.then(|| {
-        result
-            .scenes
-            .iter()
-            .enumerate()
-            .map(|(index, scene)| ExactAnchorV1 {
-                receipt: receipt.clone(),
-                record_id: format!("scene-{index}"),
-                timing: ExactAnchorTimingV1::Range {
-                    start: scene.start.timestamp,
-                    end: scene.end.timestamp,
-                },
-                frame_index: None,
-                start_frame: Some(scene.start.frame_index),
-                end_frame: Some(scene.end.frame_index),
-            })
-            .collect()
-    });
+    let anchors = if original_pts {
+        Some(
+            result
+                .scenes
+                .iter()
+                .enumerate()
+                .map(|(index, scene)| -> Result<ExactAnchorV1, ProducerError> {
+                    // Visual Analysis may resolve Foundation's compatible media
+                    // crate from a different source instance in a consumer graph.
+                    // Transfer PTS/timebase integers directly, never via seconds.
+                    let exact = |timestamp_pts: i64, timebase_num: i32, timebase_den: i32| {
+                        let base = media_core::Timebase::try_new(timebase_num, timebase_den)
+                            .map_err(|error| failed("original timebase", &error))?;
+                        media_core::Timestamp::try_new(timestamp_pts, base)
+                            .map_err(|error| failed("original PTS", &error))
+                    };
+                    let start = scene.start.timestamp;
+                    let end = scene.end.timestamp;
+                    Ok(ExactAnchorV1 {
+                        receipt: receipt.clone(),
+                        record_id: format!("scene-{index}"),
+                        timing: ExactAnchorTimingV1::Range {
+                            start: exact(start.pts, start.timebase.num, start.timebase.den)?,
+                            end: exact(end.pts, end.timebase.num, end.timebase.den)?,
+                        },
+                        frame_index: None,
+                        start_frame: Some(scene.start.frame_index),
+                        end_frame: Some(scene.end.frame_index),
+                    })
+                })
+                .collect::<Result<Vec<_>, ProducerError>>()?,
+        )
+    } else {
+        None
+    };
     Ok(SceneStageRun {
         run: SceneRun { receipt, scenes },
         original_pts: anchors,

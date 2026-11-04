@@ -1335,6 +1335,7 @@ dependencies = [
  "moenarch-audio-analysis-transcription",
  "moenarch-image-analysis-core",
  "moenarch-image-analysis-ocr",
+ "moenarch-media-core",
  "moenarch-video-analysis-core",
  "moenarch-video-analysis-ffmpeg",
  "moenarch-video-analysis-ingest",
