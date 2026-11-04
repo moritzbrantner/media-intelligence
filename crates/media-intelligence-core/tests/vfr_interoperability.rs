@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 use common::{coverage, fixture_text, item, labelled_relations, serialized};
 use media_core::{MediaRange, Timebase, Timestamp};
 use media_intelligence_core::compat::youtube_corpus::{
-    composition_input_from_batch, MediaEvidenceBatchV1,
+    composition_input_from_batch, exact_timing_from_batch, MediaEvidenceBatchV1,
 };
 use media_intelligence_core::exact_timing::{
     compose_with_exact_timing, ExactAnchorTimingV1, ExactAnchorV1, ExactEvidenceAnalysisV1,
@@ -299,6 +299,120 @@ fn exact_fixture_input() -> (
     )
     .unwrap();
     (input, batch, sidecar)
+}
+
+fn batch_with_original_frame_pts() -> (MediaIdentity, MediaEvidenceBatchV1) {
+    let (input, mut batch, _) = exact_fixture_input();
+    let fixture = fixture();
+    for scene in &mut batch.scenes {
+        let (start, end) = match scene.scene_index {
+            0 => (
+                timestamp(&fixture["frameTimestamps"][0]["timestamp"]),
+                timestamp(&fixture["cut"]),
+            ),
+            1 => (
+                timestamp(&fixture["cut"]),
+                timestamp(&fixture["syntheticSource"]["duration"]),
+            ),
+            _ => unreachable!(),
+        };
+        scene.metadata["exactTiming"] = serde_json::json!({
+            "schemaVersion": 1,
+            "clock": "media_relative",
+            "source": "ffprobe:frame-pts",
+            "start": start,
+            "end": end,
+        });
+        scene.provenance.processing_config["exactTiming"] = serde_json::json!("ffprobe:frame-pts");
+    }
+    for observation in &mut batch.ocr_observations {
+        let frame_index = observation.frame_index.unwrap() as usize;
+        observation.attributes["exactTiming"] = serde_json::json!({
+            "schemaVersion": 1,
+            "clock": "media_relative",
+            "source": "ffprobe:frame-pts",
+            "timestamp": timestamp(&fixture["frameTimestamps"][frame_index]["timestamp"]),
+        });
+        observation.provenance.processing_config["exactTiming"] =
+            serde_json::json!("ffprobe:frame-pts");
+    }
+    (input.media, batch)
+}
+
+#[test]
+fn corpus_v1_metadata_can_export_lossless_vfr_sidecar_without_schema_migration() {
+    let (media, batch) = batch_with_original_frame_pts();
+    let original = serde_json::to_vec(&batch).unwrap();
+    let batch: MediaEvidenceBatchV1 = serde_json::from_slice(&original).unwrap();
+    let sidecar = exact_timing_from_batch(media.clone(), &batch)
+        .unwrap()
+        .expect("original integer PTS recorded in v1 extension fields");
+    assert_eq!(
+        sidecar.base_revision.as_deref(),
+        Some(batch.revision.as_str())
+    );
+    assert_eq!(
+        sidecar.exact_modalities,
+        vec![Modality::VisibleText, Modality::Scene]
+    );
+    assert_eq!(sidecar.anchors.len(), 4);
+    let input = composition_input_from_batch(media, &batch).unwrap();
+    let exact = compose_with_exact_timing(&input, sidecar).unwrap();
+    let json = serde_json::to_vec(&exact).unwrap();
+    let parsed: ExactEvidenceAnalysisV1 = serde_json::from_slice(&json).unwrap();
+    assert_eq!(serde_json::to_vec(&parsed).unwrap(), json);
+    assert_eq!(parsed.legacy, compose(&input).unwrap());
+
+    let scene = parsed
+        .exact_timing
+        .anchors
+        .iter()
+        .find(|anchor| anchor.record_id == "vfr-sc-1")
+        .unwrap();
+    assert!(matches!(
+        scene.timing,
+        ExactAnchorTimingV1::Range { start, .. }
+            if start.pts == 18_000 && start.timebase.den == 90_000
+    ));
+}
+
+#[test]
+fn corpus_exact_adapter_rejects_mixed_forged_and_misprojected_pts() {
+    let (input, legacy, _) = exact_fixture_input();
+    let media = input.media;
+    assert!(exact_timing_from_batch(media.clone(), &legacy)
+        .unwrap()
+        .is_none());
+
+    let (media, batch) = batch_with_original_frame_pts();
+    let mut mixed = batch.clone();
+    mixed.scenes[1]
+        .metadata
+        .as_object_mut()
+        .unwrap()
+        .remove("exactTiming");
+    assert!(exact_timing_from_batch(media.clone(), &mixed)
+        .unwrap_err()
+        .to_string()
+        .contains("mix"));
+
+    let mut unproven = batch.clone();
+    unproven.scenes[0]
+        .provenance
+        .processing_config
+        .as_object_mut()
+        .unwrap()
+        .remove("exactTiming");
+    assert!(exact_timing_from_batch(media.clone(), &unproven).is_err());
+
+    let mut rounded = batch.clone();
+    rounded.scenes[1].metadata["exactTiming"]["start"]["pts"] = serde_json::json!("18001");
+    assert!(exact_timing_from_batch(media.clone(), &rounded).is_err());
+
+    let mut unsafe_number = batch;
+    unsafe_number.scenes[0].metadata["exactTiming"]["start"]["pts"] =
+        serde_json::json!(9_007_199_254_740_992_u64);
+    assert!(exact_timing_from_batch(media, &unsafe_number).is_err());
 }
 
 #[test]
