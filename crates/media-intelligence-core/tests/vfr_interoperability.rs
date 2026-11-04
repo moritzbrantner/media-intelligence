@@ -323,8 +323,7 @@ fn batch_with_original_frame_pts() -> (MediaIdentity, MediaEvidenceBatchV1) {
             "start": start,
             "end": end,
         });
-        scene.provenance.processing_config["exactTiming"] =
-            serde_json::json!("ffprobe:frame-pts");
+        scene.provenance.processing_config["exactTiming"] = serde_json::json!("ffprobe:frame-pts");
     }
     for observation in &mut batch.ocr_observations {
         let frame_index = observation.frame_index.unwrap() as usize;
@@ -381,7 +380,9 @@ fn corpus_v1_metadata_can_export_lossless_vfr_sidecar_without_schema_migration()
 fn corpus_exact_adapter_rejects_mixed_forged_and_misprojected_pts() {
     let (input, legacy, _) = exact_fixture_input();
     let media = input.media;
-    assert!(exact_timing_from_batch(media.clone(), &legacy).unwrap().is_none());
+    assert!(exact_timing_from_batch(media.clone(), &legacy)
+        .unwrap()
+        .is_none());
 
     let (media, batch) = batch_with_original_frame_pts();
     let mut mixed = batch.clone();
