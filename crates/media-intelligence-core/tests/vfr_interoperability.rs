@@ -10,6 +10,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 use common::{coverage, fixture_text, item, labelled_relations, serialized};
+use media_core::{MediaRange, Timebase, Timestamp};
 use media_intelligence_core::compat::youtube_corpus::{
     composition_input_from_batch, MediaEvidenceBatchV1,
 };
@@ -17,7 +18,6 @@ use media_intelligence_core::{
     compose, AssetId, ContentHash, CoverageStatus, MediaIdentity, Modality, ModalityInput,
     RelationKind, SpeechRun,
 };
-use media_core::{MediaRange, Timebase, Timestamp};
 use serde_json::Value;
 
 fn fixture() -> Value {
