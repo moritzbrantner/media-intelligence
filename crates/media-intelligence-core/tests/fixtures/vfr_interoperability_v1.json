@@ -1,0 +1,145 @@
+{
+  "schema": "media_interop_fixture",
+  "schemaVersion": 1,
+  "syntheticSource": {
+    "videoId": "7d0b6c2e-4f1a-4c3e-9a51-2b8f6d0e7c14",
+    "assetId": "youtube-corpus:video:7d0b6c2e-4f1a-4c3e-9a51-2b8f6d0e7c14",
+    "contentBytesUtf8": "vfr interoperability fixture media bytes",
+    "duration": { "pts": "36000", "timebase": { "num": 1, "den": 90000 } }
+  },
+  "frameTimestamps": [
+    { "index": 0, "timestamp": { "pts": "0", "timebase": { "num": 1, "den": 90000 } } },
+    { "index": 1, "timestamp": { "pts": "3003", "timebase": { "num": 1, "den": 90000 } } },
+    { "index": 2, "timestamp": { "pts": "7100", "timebase": { "num": 1, "den": 90000 } } },
+    { "index": 3, "timestamp": { "pts": "12000", "timebase": { "num": 1, "den": 90000 } } },
+    { "index": 4, "timestamp": { "pts": "18000", "timebase": { "num": 1, "den": 90000 } } },
+    { "index": 5, "timestamp": { "pts": "24750", "timebase": { "num": 1, "den": 90000 } } },
+    { "index": 6, "timestamp": { "pts": "33003", "timebase": { "num": 1, "den": 90000 } } }
+  ],
+  "cut": { "pts": "18000", "timebase": { "num": 1, "den": 90000 } },
+  "speechAnchors": [
+    {
+      "index": 0,
+      "start": { "pts": "9000", "timebase": { "num": 1, "den": 90000 } },
+      "end": { "pts": "18000", "timebase": { "num": 1, "den": 90000 } }
+    },
+    {
+      "index": 1,
+      "start": { "pts": "18000", "timebase": { "num": 1, "den": 90000 } },
+      "end": { "pts": "36000", "timebase": { "num": 1, "den": 90000 } }
+    }
+  ],
+  "speechRun": {
+    "receipt": {
+      "modality": "speech",
+      "producer": "audio-analysis",
+      "producerVersion": "fixture-v1",
+      "model": "synthetic-transcription",
+      "modelVersion": "fixture-v1",
+      "configHash": "sha256:4b55c3ec62f9ea12",
+      "inputHash": "sha256:aa3adcebd323985cf4b77704b150c70188714fd5476d9e86c1a4c9fd84b1a63a",
+      "runId": "vfr-speech-run-1"
+    },
+    "segments": [
+      { "index": 0, "startSeconds": 0.1, "endSeconds": 0.2, "text": "Before the cut.", "language": "en" },
+      { "index": 1, "startSeconds": 0.2, "endSeconds": 0.4, "text": "After the cut.", "language": "en" }
+    ]
+  },
+  "batch": {
+    "schema": "media_evidence",
+    "schemaVersion": 1,
+    "producer": { "name": "youtube-corpus", "revision": "fixture-v1" },
+    "video": {
+      "id": "7d0b6c2e-4f1a-4c3e-9a51-2b8f6d0e7c14",
+      "youtubeId": null,
+      "sourceUrl": "https://example.invalid/synthetic-vfr",
+      "title": "Synthetic variable-frame-rate contract"
+    },
+    "revision": "fixture-v1",
+    "scenes": [
+      {
+        "id": "vfr-sc-0",
+        "sceneIndex": 0,
+        "startFrame": 0,
+        "endFrame": 4,
+        "startSeconds": 0.0,
+        "endSeconds": 0.2,
+        "metadata": { "synthetic": true, "cutPts": "18000" },
+        "provenance": {
+          "runId": "vfr-scene-run-1",
+          "processor": "scenedetect-rs",
+          "processorVersion": "fixture-v1",
+          "model": "content",
+          "modelVersion": "fixture-v1",
+          "inputHash": "sha256:aa3adcebd323985cf4b77704b150c70188714fd5476d9e86c1a4c9fd84b1a63a",
+          "configHash": "sha256:a1fb12a0237ad2f5",
+          "processingConfig": { "synthetic": true, "timebase": [1, 90000] }
+        }
+      },
+      {
+        "id": "vfr-sc-1",
+        "sceneIndex": 1,
+        "startFrame": 4,
+        "endFrame": 7,
+        "startSeconds": 0.2,
+        "endSeconds": 0.4,
+        "metadata": { "synthetic": true, "cutPts": "18000" },
+        "provenance": {
+          "runId": "vfr-scene-run-1",
+          "processor": "scenedetect-rs",
+          "processorVersion": "fixture-v1",
+          "model": "content",
+          "modelVersion": "fixture-v1",
+          "inputHash": "sha256:aa3adcebd323985cf4b77704b150c70188714fd5476d9e86c1a4c9fd84b1a63a",
+          "configHash": "sha256:a1fb12a0237ad2f5",
+          "processingConfig": { "synthetic": true, "timebase": [1, 90000] }
+        }
+      }
+    ],
+    "ocrObservations": [
+      {
+        "id": "vfr-ocr-before",
+        "text": "Before cut",
+        "language": "en",
+        "frameIndex": 3,
+        "timestampSeconds": 0.13333333333333333,
+        "sceneIndex": 0,
+        "region": null,
+        "confidence": 0.95,
+        "attributes": { "synthetic": true },
+        "provenance": {
+          "runId": "vfr-ocr-run-1",
+          "processor": "visual-analysis",
+          "processorVersion": "fixture-v1",
+          "model": "synthetic-ocr",
+          "modelVersion": "fixture-v1",
+          "inputHash": "sha256:aa3adcebd323985cf4b77704b150c70188714fd5476d9e86c1a4c9fd84b1a63a",
+          "configHash": "sha256:417cb72d602bf49c",
+          "processingConfig": { "synthetic": true }
+        }
+      },
+      {
+        "id": "vfr-ocr-cut",
+        "text": "After cut",
+        "language": "en",
+        "frameIndex": 4,
+        "timestampSeconds": 0.2,
+        "sceneIndex": 1,
+        "region": null,
+        "confidence": 0.9,
+        "attributes": { "synthetic": true },
+        "provenance": {
+          "runId": "vfr-ocr-run-1",
+          "processor": "visual-analysis",
+          "processorVersion": "fixture-v1",
+          "model": "synthetic-ocr",
+          "modelVersion": "fixture-v1",
+          "inputHash": "sha256:aa3adcebd323985cf4b77704b150c70188714fd5476d9e86c1a4c9fd84b1a63a",
+          "configHash": "sha256:417cb72d602bf49c",
+          "processingConfig": { "synthetic": true }
+        }
+      }
+    ],
+    "ocrTracks": []
+  }
+}

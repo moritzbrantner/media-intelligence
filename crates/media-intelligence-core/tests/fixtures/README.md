@@ -14,6 +14,16 @@ Foundation timed text), but every value was written by hand or by a small script
 | `youtube_corpus_media_evidence_batch_v1.json` | YouTube Corpus `MediaEvidenceBatchV1` (`src/media_evidence.rs` at youtube-corpus `0eb1c969a6b857183b5383af8d7c6e1e473263f1`) | Compatibility: scenes, OCR observations and one OCR track with full provenance |
 | `scenedetect_rs_three_scenes.scenes.json` + `.provenance.json` | scenedetect-rs `list-scenes --format json` output (verbatim) + recorded provenance | Actual canonical scene-producer run, see below |
 | `timed_text_transcript.json` | Foundation `TimedTextContract` (moenarch-foundation `b0e26e4e671e5c43d659a2c67583ffdf5a9bbfa9`, the shape `audio-analysis` emits via `audio-timed-text-compat`) | Speech for the same video as the batch |
+| `vfr_interoperability_v1.json` | Hand-authored Foundation canonical PTS timestamps plus YouTube Corpus `MediaEvidenceBatchV1` and Media Intelligence `SpeechRun` | Variable-frame-rate frame timestamps (1/90000 tick), exact scene cut, boundary OCR, half-open scene/speech relations, shared source identity and producer receipts; checked in `tests/vfr_interoperability.rs` |
+
+The VFR file added on 2026-11-04 is **synthetic contract evidence, not an actual
+decoded clip or recorded producer execution**. The canonical timestamp anchors
+retain integer ticks; the YouTube Corpus v1 and Media Intelligence v1 adapters
+necessarily project their times to seconds. The acceptance test requires that
+projection to agree and that a frame at the cut belong only to the following
+scene. It does not claim that those existing v1 payloads preserve rational PTS
+on their wire. Producer receipts carry a matching synthetic-source content hash,
+and the Foundation corpus asset identity is checked against the batch video id.
 
 ## Canonical producer output: actual scenedetect-rs run (synthetic media)
 
