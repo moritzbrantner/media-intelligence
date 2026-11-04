@@ -17,7 +17,7 @@ use media_intelligence_core::{
     compose, AssetId, ContentHash, CoverageStatus, MediaIdentity, Modality, ModalityInput,
     RelationKind, SpeechRun,
 };
-use moenarch_media_core::{MediaRange, Timestamp};
+use media_core::{MediaRange, Timebase, Timestamp};
 use serde_json::Value;
 
 fn fixture() -> Value {
@@ -62,10 +62,7 @@ fn vfr_pts_and_cut_remain_exact_across_timebases() {
     assert!(first.contains(stamps[3]).unwrap());
     assert!(second.contains(stamps[4]).unwrap());
     assert!(cut
-        .same_instant(moenarch_media_core::Timestamp::new(
-            1,
-            moenarch_media_core::Timebase::new(1, 5)
-        ))
+        .same_instant(Timestamp::new(1, Timebase::new(1, 5)))
         .unwrap());
 
     // Reject precision-lossy JSON numbers even when they fit the i64 range.
