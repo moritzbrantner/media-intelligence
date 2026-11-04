@@ -14,6 +14,10 @@ use media_core::{MediaRange, Timebase, Timestamp};
 use media_intelligence_core::compat::youtube_corpus::{
     composition_input_from_batch, MediaEvidenceBatchV1,
 };
+use media_intelligence_core::exact_timing::{
+    compose_with_exact_timing, ExactAnchorTimingV1, ExactAnchorV1, ExactEvidenceAnalysisV1,
+    ExactTimingSidecarV1,
+};
 use media_intelligence_core::{
     compose, AssetId, ContentHash, CoverageStatus, MediaIdentity, Modality, ModalityInput,
     RelationKind, SpeechRun,
@@ -208,4 +212,210 @@ fn youtube_v1_and_speech_preserve_source_receipts_and_cut_semantics() {
             ),
         ])
     );
+}
+
+fn exact_fixture_input() -> (
+    media_intelligence_core::CompositionInput,
+    MediaEvidenceBatchV1,
+    ExactTimingSidecarV1,
+) {
+    let fixture = fixture();
+    let source = &fixture["syntheticSource"];
+    let media = MediaIdentity {
+        asset_id: AssetId::new(source["assetId"].as_str().unwrap()).unwrap(),
+        content_hash: ContentHash::from_bytes(
+            source["contentBytesUtf8"].as_str().unwrap().as_bytes(),
+        ),
+        duration_seconds: Some(timestamp(&source["duration"]).seconds()),
+    };
+    let batch: MediaEvidenceBatchV1 = serde_json::from_value(fixture["batch"].clone()).unwrap();
+    let speech: SpeechRun = serde_json::from_value(fixture["speechRun"].clone()).unwrap();
+    let mut input = composition_input_from_batch(media.clone(), &batch).unwrap();
+    input.speech = ModalityInput::Completed { runs: vec![speech] };
+
+    let mut anchors = Vec::new();
+    if let ModalityInput::Completed { runs } = &input.scenes {
+        for run in runs {
+            for scene in &run.scenes {
+                let (start, end) = match scene.index {
+                    0 => (
+                        timestamp(&fixture["frameTimestamps"][0]["timestamp"]),
+                        timestamp(&fixture["cut"]),
+                    ),
+                    1 => (timestamp(&fixture["cut"]), timestamp(&source["duration"])),
+                    _ => unreachable!("fixture has two scenes"),
+                };
+                anchors.push(ExactAnchorV1 {
+                    receipt: run.receipt.clone(),
+                    record_id: scene.id.clone(),
+                    timing: ExactAnchorTimingV1::Range { start, end },
+                    frame_index: None,
+                    start_frame: scene.start_frame,
+                    end_frame: scene.end_frame,
+                });
+            }
+        }
+    }
+    if let ModalityInput::Completed { runs } = &input.visible_text {
+        for run in runs {
+            for observation in &run.observations {
+                let frame = observation.frame_index.unwrap() as usize;
+                anchors.push(ExactAnchorV1 {
+                    receipt: run.receipt.clone(),
+                    record_id: observation.id.clone(),
+                    timing: ExactAnchorTimingV1::Instant {
+                        timestamp: timestamp(&fixture["frameTimestamps"][frame]["timestamp"]),
+                    },
+                    frame_index: observation.frame_index,
+                    start_frame: None,
+                    end_frame: None,
+                });
+            }
+        }
+    }
+    if let ModalityInput::Completed { runs } = &input.speech {
+        for run in runs {
+            for segment in &run.segments {
+                let speech = &fixture["speechAnchors"][segment.index as usize];
+                anchors.push(ExactAnchorV1 {
+                    receipt: run.receipt.clone(),
+                    record_id: segment.index.to_string(),
+                    timing: ExactAnchorTimingV1::Range {
+                        start: timestamp(&speech["start"]),
+                        end: timestamp(&speech["end"]),
+                    },
+                    frame_index: None,
+                    start_frame: None,
+                    end_frame: None,
+                });
+            }
+        }
+    }
+    let sidecar = ExactTimingSidecarV1::new(
+        media,
+        Some(batch.revision.clone()),
+        vec![Modality::Scene, Modality::VisibleText, Modality::Speech],
+        anchors,
+    )
+    .unwrap();
+    (input, batch, sidecar)
+}
+
+#[test]
+fn exact_sidecar_preserves_producer_pts_across_v1_composition() {
+    let (input, batch, sidecar) = exact_fixture_input();
+    sidecar.validate_batch_revision(&batch.revision).unwrap();
+    assert_eq!(sidecar.anchors.len(), 6);
+    let exact = compose_with_exact_timing(&input, sidecar).unwrap();
+    assert_eq!(
+        serialized(&exact.legacy),
+        serialized(&compose(&input).unwrap())
+    );
+
+    // Foundation's canonical decimal PTS and the *original* 90 kHz timebase
+    // survive the independent, versioned sidecar wire unchanged.
+    let json = serde_json::to_vec(&exact).unwrap();
+    let roundtrip: ExactEvidenceAnalysisV1 = serde_json::from_slice(&json).unwrap();
+    assert_eq!(serde_json::to_vec(&roundtrip).unwrap(), json);
+    assert_eq!(roundtrip, exact);
+    let scene = roundtrip
+        .exact_timing
+        .anchors
+        .iter()
+        .find(|anchor| anchor.record_id == "vfr-sc-1")
+        .unwrap();
+    let ExactAnchorTimingV1::Range { start, end } = scene.timing else {
+        panic!("scene must have a range")
+    };
+    assert_eq!(
+        (start.pts, start.timebase.num, start.timebase.den),
+        (18_000, 1, 90_000)
+    );
+    assert_eq!(
+        (end.pts, end.timebase.num, end.timebase.den),
+        (36_000, 1, 90_000)
+    );
+    assert_eq!((scene.start_frame, scene.end_frame), (Some(4), Some(7)));
+    assert_eq!(serde_json::to_value(start).unwrap()["pts"], "18000");
+}
+
+#[test]
+fn exact_video_pts_can_coexist_with_honest_seconds_only_speech() {
+    let (input, _, mut video_only) = exact_fixture_input();
+    video_only
+        .exact_modalities
+        .retain(|modality| *modality != Modality::Speech);
+    video_only
+        .anchors
+        .retain(|anchor| anchor.receipt.modality != Modality::Speech);
+    let composed = compose_with_exact_timing(&input, video_only.clone()).unwrap();
+    assert_eq!(composed.exact_timing.anchors.len(), 4);
+    assert_eq!(
+        composed.exact_timing.exact_modalities,
+        vec![Modality::VisibleText, Modality::Scene]
+    );
+    assert_eq!(
+        serialized(&composed.legacy),
+        serialized(&compose(&input).unwrap())
+    );
+
+    // No producer can silently claim speech is exact if it has only seconds.
+    video_only.exact_modalities.insert(0, Modality::Speech);
+    assert!(compose_with_exact_timing(&input, video_only).is_err());
+}
+
+#[test]
+fn exact_sidecar_rejects_missing_extra_or_misprojected_source_pts() {
+    let (input, batch, sidecar) = exact_fixture_input();
+    assert!(sidecar.validate_batch_revision("another-revision").is_err());
+    assert!(sidecar.validate_batch_revision(&batch.revision).is_ok());
+
+    let mut missing = sidecar.clone();
+    missing.anchors.pop();
+    assert!(compose_with_exact_timing(&input, missing).is_err());
+
+    let mut duplicated = sidecar.clone();
+    let duplicate = duplicated.anchors[0].clone();
+    duplicated.anchors.push(duplicate);
+    duplicated.anchors = ExactTimingSidecarV1::new(
+        duplicated.media.clone(),
+        duplicated.base_revision.clone(),
+        duplicated.exact_modalities.clone(),
+        duplicated.anchors,
+    )
+    .unwrap()
+    .anchors;
+    assert!(compose_with_exact_timing(&input, duplicated).is_err());
+
+    let mut wrong_frame = sidecar.clone();
+    let ocr = wrong_frame
+        .anchors
+        .iter_mut()
+        .find(|anchor| anchor.record_id == "vfr-ocr-cut")
+        .unwrap();
+    ocr.frame_index = Some(3);
+    assert!(compose_with_exact_timing(&input, wrong_frame).is_err());
+
+    let mut invented = sidecar.clone();
+    let scene = invented
+        .anchors
+        .iter_mut()
+        .find(|anchor| anchor.record_id == "vfr-sc-1")
+        .unwrap();
+    if let ExactAnchorTimingV1::Range { start, .. } = &mut scene.timing {
+        start.pts += 1;
+    }
+    assert!(compose_with_exact_timing(&input, invented).is_err());
+
+    let mut invalid_clock = sidecar.clone();
+    invalid_clock.clock = "unmapped_stream_pts".into();
+    assert!(compose_with_exact_timing(&input, invalid_clock).is_err());
+
+    let mut wrong_receipt = sidecar.clone();
+    wrong_receipt.anchors[0].receipt.input_hash = "other-source".into();
+    assert!(compose_with_exact_timing(&input, wrong_receipt).is_err());
+
+    let mut wrong_media = sidecar;
+    wrong_media.media.content_hash = ContentHash::from_bytes(b"another video");
+    assert!(compose_with_exact_timing(&input, wrong_media).is_err());
 }
