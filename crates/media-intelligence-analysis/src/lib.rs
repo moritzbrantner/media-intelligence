@@ -238,6 +238,24 @@ pub trait VisibleTextProducer {
     }
 
     fn run(&self, input: &ProducerInput<'_>) -> Result<VisibleTextRun, ProducerError>;
+
+    /// Whether this producer can carry original, media-relative integer frame PTS
+    /// through the opt-in analysis path. The default keeps existing producers v1-only.
+    fn supports_exact_frame_pts(&self) -> bool {
+        false
+    }
+
+    /// Return the ordinary v1 run together with original Foundation OCR observation
+    /// anchors from the *same* frame decode. Called only when support was declared;
+    /// every timed observation must be covered or the run is rejected.
+    fn run_with_exact_frame_pts(
+        &self,
+        _input: &ProducerInput<'_>,
+    ) -> Result<(VisibleTextRun, Vec<ExactAnchorV1>), ProducerError> {
+        Err(ProducerError::Failed {
+            reason: "producer has no implementation for original OCR frame PTS".to_string(),
+        })
+    }
 }
 
 /// The identity under which a scene-dependent visible-text producer's run is cached and
@@ -314,6 +332,11 @@ pub struct StageKey {
 pub enum CachedStage {
     Speech(SpeechRun),
     VisibleText(VisibleTextRun),
+    /// Distinct cache content: the v1 observations and original source-frame PTS.
+    ExactVisibleText {
+        run: VisibleTextRun,
+        anchors: Vec<ExactAnchorV1>,
+    },
     Scenes(SceneRun),
     /// Original source PTS captured in the same scene-decoding pass. This is
     /// never substituted for the legacy `Scenes` variant or vice versa.
@@ -435,8 +458,9 @@ pub struct AnalysisReport {
     pub analysis: EvidenceAnalysis,
 }
 
-/// Opt-in result with the existing byte-compatible v1 analysis and a separately
-/// validated exact scene sidecar. Other modalities remain seconds-only.
+/// Opt-in result with the existing v1 schema and separately validated original
+/// scene and (when supported by the producer) OCR frame PTS. Speech remains
+/// seconds-only until a speech producer supplies genuine original source anchors.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactSceneAnalysisReport {
@@ -505,9 +529,9 @@ pub fn analyze(
     execution::analyze(request, producers, cache, cancellation)
 }
 
-/// Preserve the original Foundation frame PTS/timebase from the same canonical
-/// Visual Analysis scene decode. The legacy report remains ordinary v1; this
-/// mode has a distinct cache identity and rejects unmapped source clock origins.
+/// Preserve the original Foundation PTS/timebase from canonical scene detection
+/// and supported OCR frame producers. The legacy report remains ordinary v1;
+/// exact stages use separate caches and reject unmapped source clock origins.
 pub fn analyze_with_exact_scene_timing(
     request: &AnalysisRequest,
     producers: &Producers<'_>,

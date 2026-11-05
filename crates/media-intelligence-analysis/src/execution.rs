@@ -20,7 +20,7 @@ use crate::{
     input_hash, scene_bound_identity, AnalysisError, AnalysisReport, AnalysisRequest, CachedStage,
     CancellationToken, ContentHash, ExactSceneAnalysisReport, MediaIdentity, Modality,
     ProducerError, ProducerIdentity, ProducerInput, ProducerReceipt, Producers, SceneConfig,
-    StageCache, StageKey, StageStatus, VISUAL_ANALYSIS_REVISION,
+    StageCache, StageKey, StageStatus, VisibleTextProducer, VISUAL_ANALYSIS_REVISION,
 };
 
 pub(crate) fn sha256_prefixed(bytes: &[u8]) -> String {
@@ -107,9 +107,29 @@ struct SceneStageRun {
     original_pts: Option<Vec<ExactAnchorV1>>,
 }
 
+#[derive(Clone)]
+struct VisibleTextStageRun {
+    run: VisibleTextRun,
+    original_pts: Option<Vec<ExactAnchorV1>>,
+}
+
 fn scene_input(stage: &Stage<SceneStageRun>) -> ModalityInput<SceneRun> {
     // Only clone the legacy run: original PTS can be large and is handed off
     // separately, never copied into the seconds-only composition payload.
+    match stage {
+        Stage::NotRequested => ModalityInput::NotRequested,
+        Stage::Unavailable | Stage::Cancelled => ModalityInput::Unprocessed,
+        Stage::Failed { receipt, reason } => ModalityInput::Failed {
+            receipt: receipt.clone(),
+            reason: reason.clone(),
+        },
+        Stage::Completed { run, .. } => ModalityInput::Completed {
+            runs: vec![run.run.clone()],
+        },
+    }
+}
+
+fn visible_text_input(stage: &Stage<VisibleTextStageRun>) -> ModalityInput<VisibleTextRun> {
     match stage {
         Stage::NotRequested => ModalityInput::NotRequested,
         Stage::Unavailable | Stage::Cancelled => ModalityInput::Unprocessed,
@@ -298,68 +318,76 @@ fn analyze_internal(
                     receipt: None,
                     reason: scenes_missing_reason(request.profile.scenes.is_some()),
                 },
-                Some(scene_run) => run_stage(
+                Some(scene_run) => run_visible_text_stage(
                     &context,
                     cache,
-                    Modality::VisibleText,
+                    producer,
                     scene_bound_identity(&producer.identity(), scene_run),
-                    |run: &VisibleTextRun| &run.receipt,
-                    CachedStage::VisibleText,
-                    |cached| match cached {
-                        CachedStage::VisibleText(run) => Some(run),
-                        _ => None,
-                    },
                     Some(scene_run),
                     Some(scene_run),
-                    |input| producer.run(input),
+                    original_pts,
                 ),
             }
         }
-        (true, Some(producer)) => run_stage(
+        (true, Some(producer)) => run_visible_text_stage(
             &context,
             cache,
-            Modality::VisibleText,
+            producer,
             producer.identity(),
-            |run: &VisibleTextRun| &run.receipt,
-            CachedStage::VisibleText,
-            |cached| match cached {
-                CachedStage::VisibleText(run) => Some(run),
-                _ => None,
-            },
             scene_run,
             None,
-            |input| producer.run(input),
+            original_pts,
         ),
     };
     let composition = CompositionInput {
         media: request.media.clone(),
         speech: speech.input(),
-        visible_text: visible_text.input(),
+        visible_text: visible_text_input(&visible_text),
         scenes: scene_input(&scenes),
     };
     let analysis = compose(&composition).map_err(AnalysisError::Composition)?;
-    let exact_timing = match &scenes {
-        Stage::Completed {
-            run:
-                SceneStageRun {
-                    original_pts: Some(anchors),
-                    ..
-                },
+    let mut exact_modalities = Vec::new();
+    let mut original_anchors = Vec::new();
+    if let Stage::Completed {
+        run: SceneStageRun {
+            original_pts: Some(anchors),
             ..
-        } if !anchors.is_empty() => {
-            let sidecar = ExactTimingSidecarV1::new(
-                request.media.clone(),
-                None,
-                vec![Modality::Scene],
-                anchors.clone(),
-            )
-            .map_err(AnalysisError::ExactTiming)?;
-            sidecar
-                .validate_for(&composition)
-                .map_err(AnalysisError::ExactTiming)?;
-            Some(sidecar)
+        },
+        ..
+    } = &scenes
+    {
+        if !anchors.is_empty() {
+            exact_modalities.push(Modality::Scene);
+            original_anchors.extend(anchors.iter().cloned());
         }
-        _ => None,
+    }
+    if let Stage::Completed {
+        run: VisibleTextStageRun {
+            original_pts: Some(anchors),
+            ..
+        },
+        ..
+    } = &visible_text
+    {
+        if !anchors.is_empty() {
+            exact_modalities.push(Modality::VisibleText);
+            original_anchors.extend(anchors.iter().cloned());
+        }
+    }
+    let exact_timing = if original_anchors.is_empty() {
+        None
+    } else {
+        let sidecar = ExactTimingSidecarV1::new(
+            request.media.clone(),
+            None,
+            exact_modalities,
+            original_anchors,
+        )
+        .map_err(AnalysisError::ExactTiming)?;
+        sidecar
+            .validate_for(&composition)
+            .map_err(AnalysisError::ExactTiming)?;
+        Some(sidecar)
     };
     let count = |modality: Modality| {
         analysis
@@ -372,7 +400,7 @@ fn analyze_internal(
     Ok(ExactSceneAnalysisReport {
         legacy: AnalysisReport {
             speech: speech.status(|run| &run.receipt, count(Modality::Speech)),
-            visible_text: visible_text.status(|run| &run.receipt, count(Modality::VisibleText)),
+            visible_text: visible_text.status(|run| &run.run.receipt, count(Modality::VisibleText)),
             scenes: scenes.status(|run| &run.run.receipt, count(Modality::Scene)),
             analysis,
         },
@@ -398,6 +426,60 @@ fn stage_without_producer<R>(cancellation: &CancellationToken) -> Stage<R> {
     } else {
         Stage::Unavailable
     }
+}
+
+fn run_visible_text_stage(
+    context: &Context<'_>,
+    cache: &mut dyn StageCache,
+    producer: &dyn VisibleTextProducer,
+    identity: ProducerIdentity,
+    scenes: Option<&SceneRun>,
+    required_scenes: Option<&SceneRun>,
+    original_pts: bool,
+) -> Stage<VisibleTextStageRun> {
+    let exact = original_pts && producer.supports_exact_frame_pts();
+    run_stage(
+        context,
+        cache,
+        Modality::VisibleText,
+        identity,
+        |result: &VisibleTextStageRun| &result.run.receipt,
+        |result| match result.original_pts {
+            Some(anchors) => CachedStage::ExactVisibleText {
+                run: result.run,
+                anchors,
+            },
+            None => CachedStage::VisibleText(result.run),
+        },
+        |cached| match (exact, cached) {
+            (true, CachedStage::ExactVisibleText { run, anchors }) => Some(VisibleTextStageRun {
+                run,
+                original_pts: Some(anchors),
+            }),
+            (false, CachedStage::VisibleText(run)) => Some(VisibleTextStageRun {
+                run,
+                original_pts: None,
+            }),
+            _ => None,
+        },
+        scenes,
+        required_scenes,
+        |input| {
+            if exact {
+                producer
+                    .run_with_exact_frame_pts(input)
+                    .map(|(run, anchors)| VisibleTextStageRun {
+                        run,
+                        original_pts: Some(anchors),
+                    })
+            } else {
+                producer.run(input).map(|run| VisibleTextStageRun {
+                    run,
+                    original_pts: None,
+                })
+            }
+        },
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -519,8 +601,12 @@ fn validate_run<R: Clone>(
         return Err(reason);
     }
     let cached = wrap(run.clone());
-    if let (Some(scenes), CachedStage::VisibleText(text)) = (required_scenes, &cached) {
-        if let Some(reason) = observation_outside_scenes(text, scenes) {
+    if let Some(scenes) = required_scenes {
+        let text = match &cached {
+            CachedStage::VisibleText(run) | CachedStage::ExactVisibleText { run, .. } => Some(run),
+            _ => None,
+        };
+        if let Some(reason) = text.and_then(|run| observation_outside_scenes(run, scenes)) {
             return Err(reason);
         }
     }
@@ -555,6 +641,24 @@ fn validate_run<R: Clone>(
         )
         .and_then(|sidecar| sidecar.validate_for(&input))
         .map_err(|error| format!("cached exact PTS is invalid: {error}"))?;
+    }
+    if let CachedStage::ExactVisibleText { run, anchors } = &cached {
+        if run.observations.is_empty() {
+            return if anchors.is_empty() {
+                Ok(())
+            } else {
+                Err("empty OCR run claims original PTS anchors".into())
+            };
+        }
+        ExactTimingSidecarV1::new(
+            context.media.clone(),
+            None,
+            vec![Modality::VisibleText],
+            anchors.clone(),
+        )
+        .map_err(|error| error.to_string())?
+        .validate_for(&input)
+        .map_err(|error| error.to_string())?;
     }
     Ok(())
 }
@@ -601,7 +705,8 @@ fn single_stage_input(
                 runs: vec![run.clone()],
             }
         }
-        (Modality::VisibleText, CachedStage::VisibleText(run)) => {
+        (Modality::VisibleText, CachedStage::VisibleText(run))
+        | (Modality::VisibleText, CachedStage::ExactVisibleText { run, .. }) => {
             input.visible_text = ModalityInput::Completed {
                 runs: vec![run.clone()],
             }
