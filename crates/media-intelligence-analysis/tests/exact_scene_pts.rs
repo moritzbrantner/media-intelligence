@@ -1,6 +1,8 @@
 //! Real FFprobe 90 kHz VFR timestamps through the opt-in direct-file producer.
 
 mod common;
+#[cfg(feature = "visual-analysis-ocr")]
+mod ocr_common;
 
 use std::process::Command;
 
@@ -195,4 +197,127 @@ fn direct_scene_decoding_rejects_unmapped_nonzero_stream_clock_origin() {
         StageStatus::Failed { reason, .. } => assert!(reason.contains("nonzero"), "{reason}"),
         other => panic!("unmapped source clock must not claim exact PTS: {other:?}"),
     }
+}
+
+#[cfg(feature = "visual-analysis-ocr")]
+#[test]
+fn scripted_ocr_preserves_original_vfr_frame_pts_without_reconstructing_seconds() {
+    use media_intelligence_analysis::visible_text::VisualAnalysisOcrProducer;
+
+    if Command::new("python3").arg("--version").output().is_err() {
+        eprintln!("SKIPPED exact OCR VFR acceptance: python3 required by scripted OCR");
+        return;
+    }
+    let Some(clip) = vfr_clip(false) else {
+        return;
+    };
+    let (script, log) = ocr_common::write_ocr_script(clip.dir.path());
+    let ocr = VisualAnalysisOcrProducer::new(ocr_common::scripted_config(&script, &log))
+        .expect("local OCR producer");
+    let mut request = vfr_request(&clip);
+    request.profile.visible_text = true;
+    let producers = Producers {
+        speech: None,
+        visible_text: Some(&ocr),
+    };
+    let mut cache = InMemoryStageCache::new();
+    let first = analyze_with_exact_scene_timing(
+        &request,
+        &producers,
+        &mut cache,
+        &CancellationToken::new(),
+    )
+    .unwrap();
+    assert!(
+        matches!(
+            first.legacy.visible_text,
+            StageStatus::CompletedWithFindings { .. }
+        ),
+        "real scene-aware OCR should yield observations: {:?}",
+        first.legacy.visible_text
+    );
+    let sidecar = first.exact_timing.as_ref().expect("exact OCR and scenes");
+    assert!(sidecar.exact_modalities.contains(&Modality::VisibleText));
+    let observations = sidecar
+        .anchors
+        .iter()
+        .filter(|anchor| anchor.receipt.modality == Modality::VisibleText)
+        .collect::<Vec<_>>();
+    assert!(!observations.is_empty());
+    let late_sample = observations
+        .iter()
+        .find(|anchor| anchor.frame_index == Some(7))
+        .expect("late green scene frame sampled");
+    let ExactAnchorTimingV1::Instant { timestamp } = late_sample.timing else {
+        panic!("frame-level OCR must carry one exact source timestamp");
+    };
+    assert_eq!(timestamp.pts, 81_000, "frame 7 follows dropped VFR frames");
+    assert_eq!(
+        (timestamp.timebase.num, timestamp.timebase.den),
+        (1, 90_000)
+    );
+    assert_ne!(
+        timestamp.pts,
+        7 * 9_000,
+        "do not infer PTS from frame index"
+    );
+
+    let serialized = serde_json::to_string(&first).unwrap();
+    let decoded: ExactSceneAnalysisReport = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(decoded, first);
+    assert_eq!(serde_json::to_string(&decoded).unwrap(), serialized);
+    let replay = analyze_with_exact_scene_timing(
+        &request,
+        &producers,
+        &mut cache,
+        &CancellationToken::new(),
+    )
+    .unwrap();
+    assert!(matches!(
+        replay.legacy.visible_text,
+        StageStatus::Reused { .. }
+    ));
+    assert_eq!(replay.exact_timing, first.exact_timing);
+
+    // The existing seconds-only API must continue to use the old cache identity.
+    let legacy = analyze(&request, &producers, &mut cache, &CancellationToken::new()).unwrap();
+    assert!(matches!(
+        legacy.visible_text,
+        StageStatus::CompletedWithFindings { .. }
+    ));
+
+    // Corrupting cached original PTS must invalidate the OCR stage, not let the
+    // unchanged seconds-only v1 output conceal the loss of source identity.
+    let exact_ocr_key = cache
+        .keys()
+        .into_iter()
+        .find(|key| matches!(cache.get(key), Some(CachedStage::ExactVisibleText { .. })))
+        .expect("exact OCR cache entry");
+    let Some(CachedStage::ExactVisibleText { run, mut anchors }) = cache.get(&exact_ocr_key) else {
+        panic!("exact OCR cache stores both observations and original PTS");
+    };
+    let late_anchor = anchors
+        .iter_mut()
+        .find(|a| a.frame_index == Some(7))
+        .unwrap();
+    let ExactAnchorTimingV1::Instant { timestamp } = &mut late_anchor.timing else {
+        panic!("OCR anchor has one timestamp");
+    };
+    timestamp.pts = 0;
+    cache.put(
+        exact_ocr_key,
+        CachedStage::ExactVisibleText { run, anchors },
+    );
+    let repaired = analyze_with_exact_scene_timing(
+        &request,
+        &producers,
+        &mut cache,
+        &CancellationToken::new(),
+    )
+    .unwrap();
+    assert!(matches!(
+        repaired.legacy.visible_text,
+        StageStatus::CompletedWithFindings { .. }
+    ));
+    assert_eq!(repaired.exact_timing, first.exact_timing);
 }
