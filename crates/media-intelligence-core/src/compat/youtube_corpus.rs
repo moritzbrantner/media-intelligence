@@ -5,15 +5,42 @@
 //! YouTube Corpus. SponsorBlock data is not producer evidence for this core and is
 //! accepted but not composed.
 
+use std::collections::BTreeMap;
+
+use media_core::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use std::collections::BTreeMap;
-
+use crate::exact_timing::{
+    ExactAnchorTimingV1, ExactAnchorV1, ExactTimingError, ExactTimingSidecarV1,
+};
 use crate::{
     CompositionError, CompositionInput, MediaIdentity, Modality, ModalityInput, OcrObservation,
     OcrTrack, ProducerReceipt, Region, SceneInterval, SceneRun, VisibleTextRun,
 };
+
+/// Producer assertion used by the opt-in exact FFprobe decoder. A v1 seconds
+/// projection alone is never proof that the original PTS was retained.
+const RECORDED_FRAME_PTS: &str = "ffprobe:frame-pts";
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ExactSceneTimingV1 {
+    schema_version: u32,
+    clock: String,
+    source: String,
+    start: Timestamp,
+    end: Timestamp,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ExactOcrTimingV1 {
+    schema_version: u32,
+    clock: String,
+    source: String,
+    timestamp: Timestamp,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -186,6 +213,137 @@ pub fn composition_input_from_batch(
         visible_text: completed_or_unprocessed(ocr_runs.into_values().collect()),
         scenes: completed_or_unprocessed(scene_runs.into_values().collect()),
     })
+}
+
+/// Read original PTS carried in the open metadata/attributes fields of the
+/// unchanged YouTube Corpus v1 batch. No timestamp is reconstructed from
+/// `startSeconds`, `endSeconds`, or `timestampSeconds`.
+///
+/// Returns `None` for ordinary seconds-only v1 data. If a producer asserts
+/// exact timing for *any* record of a modality, every record of that modality
+/// must have an anchor and the producer run must record its exact decoder.
+/// Mixed/incorrect assertions fail closed instead of silently dropping data.
+pub fn exact_timing_from_batch(
+    media: MediaIdentity,
+    batch: &MediaEvidenceBatchV1,
+) -> Result<Option<ExactTimingSidecarV1>, ExactTimingError> {
+    if batch.schema != "media_evidence"
+        || batch.schema_version != 1
+        || batch.revision.trim().is_empty()
+    {
+        return Err(ExactTimingError(
+            "expected a versioned YouTube Corpus v1 evidence batch".into(),
+        ));
+    }
+    let mut anchors = Vec::new();
+    let mut exact_modalities = Vec::new();
+
+    let mut exact_scenes = 0;
+    for scene in &batch.scenes {
+        let Some(wire) = scene.metadata.get("exactTiming") else {
+            continue;
+        };
+        let timing: ExactSceneTimingV1 = serde_json::from_value(wire.clone()).map_err(|error| {
+            ExactTimingError(format!("invalid scene {} exact PTS: {error}", scene.id))
+        })?;
+        validate_exact_provenance(
+            timing.schema_version,
+            &timing.clock,
+            &timing.source,
+            &scene.provenance,
+            &scene.id,
+        )?;
+        exact_scenes += 1;
+        anchors.push(ExactAnchorV1 {
+            receipt: receipt(Modality::Scene, &scene.provenance),
+            record_id: scene.id.clone(),
+            timing: ExactAnchorTimingV1::Range {
+                start: timing.start,
+                end: timing.end,
+            },
+            frame_index: None,
+            start_frame: Some(scene.start_frame),
+            end_frame: Some(scene.end_frame),
+        });
+    }
+    if exact_scenes != 0 {
+        if exact_scenes != batch.scenes.len() {
+            return Err(ExactTimingError(
+                "scene records mix original PTS with seconds-only timing".into(),
+            ));
+        }
+        exact_modalities.push(Modality::Scene);
+    }
+
+    let mut exact_ocr = 0;
+    for observation in &batch.ocr_observations {
+        let Some(wire) = observation.attributes.get("exactTiming") else {
+            continue;
+        };
+        let timing: ExactOcrTimingV1 = serde_json::from_value(wire.clone()).map_err(|error| {
+            ExactTimingError(format!("invalid OCR {} exact PTS: {error}", observation.id))
+        })?;
+        validate_exact_provenance(
+            timing.schema_version,
+            &timing.clock,
+            &timing.source,
+            &observation.provenance,
+            &observation.id,
+        )?;
+        exact_ocr += 1;
+        anchors.push(ExactAnchorV1 {
+            receipt: receipt(Modality::VisibleText, &observation.provenance),
+            record_id: observation.id.clone(),
+            timing: ExactAnchorTimingV1::Instant {
+                timestamp: timing.timestamp,
+            },
+            frame_index: observation.frame_index,
+            start_frame: None,
+            end_frame: None,
+        });
+    }
+    if exact_ocr != 0 {
+        if exact_ocr != batch.ocr_observations.len() {
+            return Err(ExactTimingError(
+                "OCR records mix original PTS with seconds-only timing".into(),
+            ));
+        }
+        exact_modalities.push(Modality::VisibleText);
+    }
+
+    if exact_modalities.is_empty() {
+        return Ok(None);
+    }
+    let input = composition_input_from_batch(media.clone(), batch)
+        .map_err(|error| ExactTimingError(error.to_string()))?;
+    let sidecar = ExactTimingSidecarV1::new(
+        media,
+        Some(batch.revision.clone()),
+        exact_modalities,
+        anchors,
+    )?;
+    sidecar.validate_batch_revision(&batch.revision)?;
+    sidecar.validate_for(&input)?;
+    Ok(Some(sidecar))
+}
+
+fn validate_exact_provenance(
+    version: u32,
+    clock: &str,
+    source: &str,
+    provenance: &ProcessingEvidenceV1,
+    record: &str,
+) -> Result<(), ExactTimingError> {
+    if version != 1
+        || clock != "media_relative"
+        || source != RECORDED_FRAME_PTS
+        || provenance.processing_config["exactTiming"].as_str() != Some(RECORDED_FRAME_PTS)
+    {
+        return Err(ExactTimingError(format!(
+            "record {record} lacks recorded, aligned original FFprobe PTS provenance"
+        )));
+    }
+    Ok(())
 }
 
 fn completed_or_unprocessed<R>(runs: Vec<R>) -> ModalityInput<R> {

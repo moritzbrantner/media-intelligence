@@ -34,6 +34,7 @@
 
 pub mod compat;
 mod composition;
+pub mod exact_timing;
 
 use std::fmt::{Display, Formatter};
 

@@ -12,6 +12,7 @@ name = "media_intelligence_analysis"
 
 [dependencies]
 media-intelligence-core = { path = "../media-intelligence-core" }
+moenarch-media-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

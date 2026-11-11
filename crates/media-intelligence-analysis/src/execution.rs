@@ -6,18 +6,21 @@ use std::fs::{File, Metadata};
 use std::io::Read;
 use std::path::Path;
 
+use media_intelligence_core::exact_timing::{
+    ExactAnchorTimingV1, ExactAnchorV1, ExactTimingSidecarV1,
+};
 use media_intelligence_core::{
     compose, CompositionInput, ModalityInput, SceneInterval, SceneRun, SpeechRun, VisibleTextRun,
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use video_analysis_ffmpeg::FfmpegVideoSource;
+use video_analysis_ffmpeg::{FfmpegSourceOptions, FfmpegVideoSource};
 
 use crate::{
     input_hash, scene_bound_identity, AnalysisError, AnalysisReport, AnalysisRequest, CachedStage,
-    CancellationToken, ContentHash, MediaIdentity, Modality, ProducerError, ProducerIdentity,
-    ProducerInput, ProducerReceipt, Producers, SceneConfig, StageCache, StageKey, StageStatus,
-    VISUAL_ANALYSIS_REVISION,
+    CancellationToken, ContentHash, ExactSceneAnalysisReport, MediaIdentity, Modality,
+    ProducerError, ProducerIdentity, ProducerInput, ProducerReceipt, Producers, SceneConfig,
+    StageCache, StageKey, StageStatus, VisibleTextProducer, VISUAL_ANALYSIS_REVISION,
 };
 
 pub(crate) fn sha256_prefixed(bytes: &[u8]) -> String {
@@ -98,6 +101,48 @@ enum Stage<R> {
     },
 }
 
+#[derive(Clone)]
+struct SceneStageRun {
+    run: SceneRun,
+    original_pts: Option<Vec<ExactAnchorV1>>,
+}
+
+#[derive(Clone)]
+struct VisibleTextStageRun {
+    run: VisibleTextRun,
+    original_pts: Option<Vec<ExactAnchorV1>>,
+}
+
+fn scene_input(stage: &Stage<SceneStageRun>) -> ModalityInput<SceneRun> {
+    // Only clone the legacy run: original PTS can be large and is handed off
+    // separately, never copied into the seconds-only composition payload.
+    match stage {
+        Stage::NotRequested => ModalityInput::NotRequested,
+        Stage::Unavailable | Stage::Cancelled => ModalityInput::Unprocessed,
+        Stage::Failed { receipt, reason } => ModalityInput::Failed {
+            receipt: receipt.clone(),
+            reason: reason.clone(),
+        },
+        Stage::Completed { run, .. } => ModalityInput::Completed {
+            runs: vec![run.run.clone()],
+        },
+    }
+}
+
+fn visible_text_input(stage: &Stage<VisibleTextStageRun>) -> ModalityInput<VisibleTextRun> {
+    match stage {
+        Stage::NotRequested => ModalityInput::NotRequested,
+        Stage::Unavailable | Stage::Cancelled => ModalityInput::Unprocessed,
+        Stage::Failed { receipt, reason } => ModalityInput::Failed {
+            receipt: receipt.clone(),
+            reason: reason.clone(),
+        },
+        Stage::Completed { run, .. } => ModalityInput::Completed {
+            runs: vec![run.run.clone()],
+        },
+    }
+}
+
 impl<R: Clone> Stage<R> {
     fn input(&self) -> ModalityInput<R> {
         match self {
@@ -151,6 +196,25 @@ pub(crate) fn analyze(
     cache: &mut dyn StageCache,
     cancellation: &CancellationToken,
 ) -> Result<AnalysisReport, AnalysisError> {
+    analyze_internal(request, producers, cache, cancellation, false).map(|result| result.legacy)
+}
+
+pub(crate) fn analyze_with_exact_scene_timing(
+    request: &AnalysisRequest,
+    producers: &Producers<'_>,
+    cache: &mut dyn StageCache,
+    cancellation: &CancellationToken,
+) -> Result<ExactSceneAnalysisReport, AnalysisError> {
+    analyze_internal(request, producers, cache, cancellation, true)
+}
+
+fn analyze_internal(
+    request: &AnalysisRequest,
+    producers: &Producers<'_>,
+    cache: &mut dyn StageCache,
+    cancellation: &CancellationToken,
+    original_pts: bool,
+) -> Result<ExactSceneAnalysisReport, AnalysisError> {
     let path = request.media_path.as_path();
     if regular_file_metadata(path).is_none() {
         return Err(AnalysisError::MediaMissing {
@@ -209,23 +273,40 @@ pub(crate) fn analyze(
             &context,
             cache,
             Modality::Scene,
-            config.producer_identity(),
-            |run: &SceneRun| &run.receipt,
-            CachedStage::Scenes,
-            |cached| match cached {
-                CachedStage::Scenes(run) => Some(run),
+            if original_pts {
+                config.exact_producer_identity()
+            } else {
+                config.producer_identity()
+            },
+            |result: &SceneStageRun| &result.run.receipt,
+            |result| match result.original_pts {
+                Some(anchors) => CachedStage::ExactScenes {
+                    run: result.run,
+                    anchors,
+                },
+                None => CachedStage::Scenes(result.run),
+            },
+            |cached| match (original_pts, cached) {
+                (true, CachedStage::ExactScenes { run, anchors }) => Some(SceneStageRun {
+                    run,
+                    original_pts: Some(anchors),
+                }),
+                (false, CachedStage::Scenes(run)) => Some(SceneStageRun {
+                    run,
+                    original_pts: None,
+                }),
                 _ => None,
             },
             None,
             None,
-            |input| detect_scenes(input, config),
+            |input| detect_scenes(input, config, original_pts),
         ),
     };
 
     // Visible text runs after scenes so that a scene-dependent producer (#33) can sample
     // the scene intervals of this same analysis.
     let scene_run = match &scenes {
-        Stage::Completed { run, .. } => Some(run),
+        Stage::Completed { run, .. } => Some(&run.run),
         _ => None,
     };
     let visible_text = match (request.profile.visible_text, producers.visible_text) {
@@ -237,46 +318,77 @@ pub(crate) fn analyze(
                     receipt: None,
                     reason: scenes_missing_reason(request.profile.scenes.is_some()),
                 },
-                Some(scene_run) => run_stage(
+                Some(scene_run) => run_visible_text_stage(
                     &context,
                     cache,
-                    Modality::VisibleText,
+                    producer,
                     scene_bound_identity(&producer.identity(), scene_run),
-                    |run: &VisibleTextRun| &run.receipt,
-                    CachedStage::VisibleText,
-                    |cached| match cached {
-                        CachedStage::VisibleText(run) => Some(run),
-                        _ => None,
-                    },
                     Some(scene_run),
                     Some(scene_run),
-                    |input| producer.run(input),
+                    original_pts,
                 ),
             }
         }
-        (true, Some(producer)) => run_stage(
+        (true, Some(producer)) => run_visible_text_stage(
             &context,
             cache,
-            Modality::VisibleText,
+            producer,
             producer.identity(),
-            |run: &VisibleTextRun| &run.receipt,
-            CachedStage::VisibleText,
-            |cached| match cached {
-                CachedStage::VisibleText(run) => Some(run),
-                _ => None,
-            },
             scene_run,
             None,
-            |input| producer.run(input),
+            original_pts,
         ),
     };
-    let analysis = compose(&CompositionInput {
+    let composition = CompositionInput {
         media: request.media.clone(),
         speech: speech.input(),
-        visible_text: visible_text.input(),
-        scenes: scenes.input(),
-    })
-    .map_err(AnalysisError::Composition)?;
+        visible_text: visible_text_input(&visible_text),
+        scenes: scene_input(&scenes),
+    };
+    let analysis = compose(&composition).map_err(AnalysisError::Composition)?;
+    let mut exact_modalities = Vec::new();
+    let mut original_anchors = Vec::new();
+    if let Stage::Completed {
+        run: SceneStageRun {
+            original_pts: Some(anchors),
+            ..
+        },
+        ..
+    } = &scenes
+    {
+        if !anchors.is_empty() {
+            exact_modalities.push(Modality::Scene);
+            original_anchors.extend(anchors.iter().cloned());
+        }
+    }
+    if let Stage::Completed {
+        run: VisibleTextStageRun {
+            original_pts: Some(anchors),
+            ..
+        },
+        ..
+    } = &visible_text
+    {
+        if !anchors.is_empty() {
+            exact_modalities.push(Modality::VisibleText);
+            original_anchors.extend(anchors.iter().cloned());
+        }
+    }
+    let exact_timing = if original_anchors.is_empty() {
+        None
+    } else {
+        let sidecar = ExactTimingSidecarV1::new(
+            request.media.clone(),
+            None,
+            exact_modalities,
+            original_anchors,
+        )
+        .map_err(AnalysisError::ExactTiming)?;
+        sidecar
+            .validate_for(&composition)
+            .map_err(AnalysisError::ExactTiming)?;
+        Some(sidecar)
+    };
     let count = |modality: Modality| {
         analysis
             .evidence
@@ -285,11 +397,14 @@ pub(crate) fn analyze(
             .count()
     };
 
-    Ok(AnalysisReport {
-        speech: speech.status(|run| &run.receipt, count(Modality::Speech)),
-        visible_text: visible_text.status(|run| &run.receipt, count(Modality::VisibleText)),
-        scenes: scenes.status(|run| &run.receipt, count(Modality::Scene)),
-        analysis,
+    Ok(ExactSceneAnalysisReport {
+        legacy: AnalysisReport {
+            speech: speech.status(|run| &run.receipt, count(Modality::Speech)),
+            visible_text: visible_text.status(|run| &run.run.receipt, count(Modality::VisibleText)),
+            scenes: scenes.status(|run| &run.run.receipt, count(Modality::Scene)),
+            analysis,
+        },
+        exact_timing,
     })
 }
 
@@ -311,6 +426,60 @@ fn stage_without_producer<R>(cancellation: &CancellationToken) -> Stage<R> {
     } else {
         Stage::Unavailable
     }
+}
+
+fn run_visible_text_stage(
+    context: &Context<'_>,
+    cache: &mut dyn StageCache,
+    producer: &dyn VisibleTextProducer,
+    identity: ProducerIdentity,
+    scenes: Option<&SceneRun>,
+    required_scenes: Option<&SceneRun>,
+    original_pts: bool,
+) -> Stage<VisibleTextStageRun> {
+    let exact = original_pts && producer.supports_exact_frame_pts();
+    run_stage(
+        context,
+        cache,
+        Modality::VisibleText,
+        identity,
+        |result: &VisibleTextStageRun| &result.run.receipt,
+        |result| match result.original_pts {
+            Some(anchors) => CachedStage::ExactVisibleText {
+                run: result.run,
+                anchors,
+            },
+            None => CachedStage::VisibleText(result.run),
+        },
+        |cached| match (exact, cached) {
+            (true, CachedStage::ExactVisibleText { run, anchors }) => Some(VisibleTextStageRun {
+                run,
+                original_pts: Some(anchors),
+            }),
+            (false, CachedStage::VisibleText(run)) => Some(VisibleTextStageRun {
+                run,
+                original_pts: None,
+            }),
+            _ => None,
+        },
+        scenes,
+        required_scenes,
+        |input| {
+            if exact {
+                producer
+                    .run_with_exact_frame_pts(input)
+                    .map(|(run, anchors)| VisibleTextStageRun {
+                        run,
+                        original_pts: Some(anchors),
+                    })
+            } else {
+                producer.run(input).map(|run| VisibleTextStageRun {
+                    run,
+                    original_pts: None,
+                })
+            }
+        },
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -431,18 +600,67 @@ fn validate_run<R: Clone>(
     {
         return Err(reason);
     }
-    if let (Some(scenes), CachedStage::VisibleText(text)) = (required_scenes, wrap(run.clone())) {
-        if let Some(reason) = observation_outside_scenes(&text, scenes) {
+    let cached = wrap(run.clone());
+    if let Some(scenes) = required_scenes {
+        let text = match &cached {
+            CachedStage::VisibleText(run) | CachedStage::ExactVisibleText { run, .. } => Some(run),
+            _ => None,
+        };
+        if let Some(reason) = text.and_then(|run| observation_outside_scenes(run, scenes)) {
             return Err(reason);
         }
     }
-    compose(&single_stage_input(
-        context.media,
-        modality,
-        &wrap(run.clone()),
-    ))
-    .map(|_| ())
-    .map_err(|error| format!("producer run is not composable: {error}"))
+    let input = single_stage_input(context.media, modality, &cached);
+    compose(&input).map_err(|error| format!("producer run is not composable: {error}"))?;
+    if let CachedStage::ExactScenes { run, anchors } = &cached {
+        if run.scenes.is_empty() {
+            return if anchors.is_empty() {
+                Ok(())
+            } else {
+                Err("empty scene run claims original PTS anchors".into())
+            };
+        }
+        let Some(first) = run.scenes.first() else {
+            return Err("exact scene run is empty".into());
+        };
+        let has_media_origin = anchors.iter().any(|anchor| {
+            anchor.record_id == first.id
+                && matches!(
+                    anchor.timing,
+                    ExactAnchorTimingV1::Range { start, .. } if start.pts == 0
+                )
+        });
+        if !has_media_origin {
+            return Err("exact scene clock has no verified media-relative zero origin".into());
+        }
+        ExactTimingSidecarV1::new(
+            context.media.clone(),
+            None,
+            vec![Modality::Scene],
+            anchors.clone(),
+        )
+        .and_then(|sidecar| sidecar.validate_for(&input))
+        .map_err(|error| format!("cached exact PTS is invalid: {error}"))?;
+    }
+    if let CachedStage::ExactVisibleText { run, anchors } = &cached {
+        if run.observations.is_empty() {
+            return if anchors.is_empty() {
+                Ok(())
+            } else {
+                Err("empty OCR run claims original PTS anchors".into())
+            };
+        }
+        ExactTimingSidecarV1::new(
+            context.media.clone(),
+            None,
+            vec![Modality::VisibleText],
+            anchors.clone(),
+        )
+        .map_err(|error| error.to_string())?
+        .validate_for(&input)
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 /// A scene-dependent run claims its frames were sampled from `scenes`; reject one (fresh
@@ -487,12 +705,14 @@ fn single_stage_input(
                 runs: vec![run.clone()],
             }
         }
-        (Modality::VisibleText, CachedStage::VisibleText(run)) => {
+        (Modality::VisibleText, CachedStage::VisibleText(run))
+        | (Modality::VisibleText, CachedStage::ExactVisibleText { run, .. }) => {
             input.visible_text = ModalityInput::Completed {
                 runs: vec![run.clone()],
             }
         }
-        (Modality::Scene, CachedStage::Scenes(run)) => {
+        (Modality::Scene, CachedStage::Scenes(run))
+        | (Modality::Scene, CachedStage::ExactScenes { run, .. }) => {
             input.scenes = ModalityInput::Completed {
                 runs: vec![run.clone()],
             }
@@ -557,12 +777,20 @@ fn receipt_mismatch(
 fn detect_scenes(
     input: &ProducerInput<'_>,
     config: &SceneConfig,
-) -> Result<SceneRun, ProducerError> {
+    original_pts: bool,
+) -> Result<SceneStageRun, ProducerError> {
     let failed = |stage: &str, error: &dyn std::fmt::Display| ProducerError::Failed {
         reason: format!("visual-analysis {stage} failed: {error}"),
     };
-    let mut source =
-        FfmpegVideoSource::open(input.media_path).map_err(|error| failed("video open", &error))?;
+    let mut source = if original_pts {
+        FfmpegVideoSource::open_path_with_exact_frame_pts(
+            input.media_path,
+            FfmpegSourceOptions::recorded(),
+        )
+    } else {
+        FfmpegVideoSource::open(input.media_path)
+    }
+    .map_err(|error| failed("video open", &error))?;
     let result = video_analysis_ingest::surface::detect_content_scenes(
         &mut source,
         config.threshold,
@@ -570,6 +798,18 @@ fn detect_scenes(
     )
     .map_err(|error| failed("scene detection", &error))?;
     drop(source);
+
+    if original_pts
+        && result
+            .scenes
+            .first()
+            .is_some_and(|scene| scene.start.timestamp.pts != 0)
+    {
+        return Err(ProducerError::Failed {
+            reason: "source first-frame PTS is nonzero; an exact media-relative clock mapping is required"
+                .into(),
+        });
+    }
 
     let scenes = result
         .scenes
@@ -584,18 +824,62 @@ fn detect_scenes(
             end_frame: Some(scene.end.frame_index),
         })
         .collect();
-    let identity = config.producer_identity();
-    Ok(SceneRun {
-        receipt: ProducerReceipt {
-            config: Some(json!({
-                "adapter": "video-analysis-ingest.detect_content_scenes",
-                "threshold": config.threshold,
-                "minSceneLen": config.min_scene_len,
-                "visualAnalysisRevision": VISUAL_ANALYSIS_REVISION,
-            })),
-            ..attempted_receipt(Modality::Scene, &identity, input.input_hash)
-        },
-        scenes,
+    let identity = if original_pts {
+        config.exact_producer_identity()
+    } else {
+        config.producer_identity()
+    };
+    let mut recorded_config = json!({
+        "adapter": "video-analysis-ingest.detect_content_scenes",
+        "threshold": config.threshold,
+        "minSceneLen": config.min_scene_len,
+        "visualAnalysisRevision": VISUAL_ANALYSIS_REVISION,
+    });
+    if original_pts {
+        recorded_config["sourcePts"] = json!("ffprobe-frame-v1");
+    }
+    let receipt = ProducerReceipt {
+        config: Some(recorded_config),
+        ..attempted_receipt(Modality::Scene, &identity, input.input_hash)
+    };
+    let anchors = if original_pts {
+        Some(
+            result
+                .scenes
+                .iter()
+                .enumerate()
+                .map(|(index, scene)| -> Result<ExactAnchorV1, ProducerError> {
+                    // Visual Analysis may resolve Foundation's compatible media
+                    // crate from a different source instance in a consumer graph.
+                    // Transfer PTS/timebase integers directly, never via seconds.
+                    let exact = |timestamp_pts: i64, timebase_num: i32, timebase_den: i32| {
+                        let base = media_core::Timebase::try_new(timebase_num, timebase_den)
+                            .map_err(|error| failed("original timebase", &error))?;
+                        media_core::Timestamp::try_new(timestamp_pts, base)
+                            .map_err(|error| failed("original PTS", &error))
+                    };
+                    let start = scene.start.timestamp;
+                    let end = scene.end.timestamp;
+                    Ok(ExactAnchorV1 {
+                        receipt: receipt.clone(),
+                        record_id: format!("scene-{index}"),
+                        timing: ExactAnchorTimingV1::Range {
+                            start: exact(start.pts, start.timebase.num, start.timebase.den)?,
+                            end: exact(end.pts, end.timebase.num, end.timebase.den)?,
+                        },
+                        frame_index: None,
+                        start_frame: Some(scene.start.frame_index),
+                        end_frame: Some(scene.end.frame_index),
+                    })
+                })
+                .collect::<Result<Vec<_>, ProducerError>>()?,
+        )
+    } else {
+        None
+    };
+    Ok(SceneStageRun {
+        run: SceneRun { receipt, scenes },
+        original_pts: anchors,
     })
 }
 

@@ -41,6 +41,12 @@
 //!   with `FfmpegVideoSource`, calls `analyze_scene_aware_ocr` with the scene intervals,
 //!   and maps the result with [`visible_text_run_from_analysis`]. Upstream errors are
 //!   [`ProducerError::Failed`] carrying the upstream message.
+//! * **Original PTS (opt-in).** [`VisibleTextProducer::run_with_exact_frame_pts`] opens
+//!   the same media through visual-analysis's original-PTS FFmpeg source and retains an
+//!   exact Foundation anchor for each text observation. It copies the decoded frame's
+//!   integer PTS and timebase, rejecting a missing or mismatched frame position; it
+//!   never derives timestamps by rounding the legacy seconds field. Ordinary `run`
+//!   and its v1 schema remain unchanged.
 //! * **Mapping** ([`visible_text_run_from_analysis`], pure): one [`OcrObservation`] per
 //!   upstream text observation, with a run-unique id, the text, the frame time and index,
 //!   the `language` attribute, the region and the upstream score as confidence. One
@@ -55,11 +61,12 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+use media_intelligence_core::exact_timing::{ExactAnchorTimingV1, ExactAnchorV1};
 use media_intelligence_core::{OcrObservation, OcrTrack, Region};
 use num_rational::Rational64;
 use serde_json::json;
 use video_analysis_core::{FramePosition, Scene};
-use video_analysis_ffmpeg::FfmpegVideoSource;
+use video_analysis_ffmpeg::{FfmpegSourceOptions, FfmpegVideoSource};
 use video_analysis_ingest::surface::scene_ocr::analyze_scene_aware_ocr;
 
 /// The pinned `image-analysis-ocr` crate (backends, [`OcrRequest`], presets), so callers
@@ -233,29 +240,12 @@ impl VisualAnalysisOcrProducer {
     pub fn config(&self) -> &VisualAnalysisOcrConfig {
         &self.config
     }
-}
 
-impl VisibleTextProducer for VisualAnalysisOcrProducer {
-    fn identity(&self) -> ProducerIdentity {
-        let backend = &self.config.backend;
-        ProducerIdentity {
-            producer: format!("{OCR_PRODUCER_PREFIX}:{}", backend.kind()),
-            producer_version: VISUAL_ANALYSIS_REVISION.to_string(),
-            model: backend.model_id(),
-            model_version: self
-                .config
-                .model_version
-                .clone()
-                .unwrap_or_else(|| UNSPECIFIED_MODEL_VERSION.to_string()),
-            config_hash: self.config.config_hash(),
-        }
-    }
-
-    fn requires_scenes(&self) -> bool {
-        true
-    }
-
-    fn run(&self, input: &ProducerInput<'_>) -> Result<VisibleTextRun, ProducerError> {
+    fn run_internal(
+        &self,
+        input: &ProducerInput<'_>,
+        original_pts: bool,
+    ) -> Result<(VisibleTextRun, Vec<ExactAnchorV1>), ProducerError> {
         if input.cancellation.is_cancelled() {
             return Err(ProducerError::Cancelled);
         }
@@ -280,8 +270,17 @@ impl VisibleTextProducer for VisualAnalysisOcrProducer {
         let upstream = |stage: &str, error: &dyn std::fmt::Display| {
             failed(format!("visual-analysis {stage} failed: {error}"))
         };
-        let mut source =
-            FfmpegVideoSource::open(input.media_path).map_err(|e| upstream("video open", &e))?;
+        // In opt-in mode the decoded OCR frames carry original source FFprobe
+        // PTS, as in the scene producer. The default v1 path is untouched.
+        let mut source = if original_pts {
+            FfmpegVideoSource::open_path_with_exact_frame_pts(
+                input.media_path,
+                FfmpegSourceOptions::recorded(),
+            )
+        } else {
+            FfmpegVideoSource::open(input.media_path)
+        }
+        .map_err(|error| upstream("video open", &error))?;
         let frame_rate = source
             .source_info()
             .video
@@ -291,9 +290,8 @@ impl VisibleTextProducer for VisualAnalysisOcrProducer {
             .ok_or_else(|| failed("the video stream declares no frame rate".to_string()))?;
         let scenes = upstream_scenes(scene_run, frame_rate)?;
         let request = self.config.request.clone();
-        // Content-derived inputs only, so the result depends on nothing outside the stage
-        // key (content hash, producer identity, scene intervals): the track-id namespace is
-        // the content hash and the duration is the end of the last scene.
+        // Content-derived inputs only: track IDs use the media hash and the
+        // duration is the end of the last supplied scene. No hidden inputs.
         let video_id = input.media.content_hash.as_str();
         let duration = scene_run
             .scenes
@@ -303,7 +301,7 @@ impl VisibleTextProducer for VisualAnalysisOcrProducer {
         let analysis = match &self.config.backend {
             OcrBackendConfig::OnnxTrOcr(options) => {
                 let backend = ocr::OnnxTrOcrBackend::from_local_model(options.clone())
-                    .map_err(|e| upstream("ONNX TrOCR model load", &e))?;
+                    .map_err(|error| upstream("ONNX TrOCR model load", &error))?;
                 analyze_scene_aware_ocr(&mut source, backend, request, video_id, &scenes, duration)
             }
             OcrBackendConfig::JsonCommand { command, args, .. } => {
@@ -311,12 +309,104 @@ impl VisibleTextProducer for VisualAnalysisOcrProducer {
                 analyze_scene_aware_ocr(&mut source, backend, request, video_id, &scenes, duration)
             }
         }
-        .map_err(|e| upstream("scene-aware OCR", &e))?;
+        .map_err(|error| upstream("scene-aware OCR", &error))?;
         drop(source);
 
         let identity = scene_bound_identity(&self.identity(), scene_run);
-        visible_text_run_from_analysis(&identity, input.input_hash, &analysis)
+        let run = visible_text_run_from_analysis(&identity, input.input_hash, &analysis)?;
+        let anchors = if original_pts {
+            original_ocr_anchors(&run, &analysis)?
+        } else {
+            Vec::new()
+        };
+        Ok((run, anchors))
     }
+}
+
+impl VisibleTextProducer for VisualAnalysisOcrProducer {
+    fn identity(&self) -> ProducerIdentity {
+        let backend = &self.config.backend;
+        ProducerIdentity {
+            producer: format!("{OCR_PRODUCER_PREFIX}:{}", backend.kind()),
+            producer_version: VISUAL_ANALYSIS_REVISION.to_string(),
+            model: backend.model_id(),
+            model_version: self
+                .config
+                .model_version
+                .clone()
+                .unwrap_or_else(|| UNSPECIFIED_MODEL_VERSION.to_string()),
+            config_hash: self.config.config_hash(),
+        }
+    }
+
+    fn requires_scenes(&self) -> bool {
+        true
+    }
+
+    fn run(&self, input: &ProducerInput<'_>) -> Result<VisibleTextRun, ProducerError> {
+        self.run_internal(input, false).map(|(run, _)| run)
+    }
+
+    fn supports_exact_frame_pts(&self) -> bool {
+        true
+    }
+
+    fn run_with_exact_frame_pts(
+        &self,
+        input: &ProducerInput<'_>,
+    ) -> Result<(VisibleTextRun, Vec<ExactAnchorV1>), ProducerError> {
+        self.run_internal(input, true)
+    }
+}
+
+/// Preserve integer source PTS directly from the frames decoded by visual-analysis.
+/// The index-to-id mapping must match [`visible_text_run_from_analysis`], including
+/// observations without text. Reconstructing PTS from `timestamp_seconds` is forbidden.
+fn original_ocr_anchors(
+    run: &VisibleTextRun,
+    analysis: &SceneAwareOcrAnalysis,
+) -> Result<Vec<ExactAnchorV1>, ProducerError> {
+    let failed = |reason: String| ProducerError::Failed { reason };
+    let mut anchors = Vec::with_capacity(run.observations.len());
+    for (index, observation) in analysis.observations.iter().enumerate() {
+        if observation.text.is_none() {
+            continue;
+        }
+        let frame = observation.frame.ok_or_else(|| {
+            failed(format!(
+                "upstream OCR observation {index} has no original decoded frame position"
+            ))
+        })?;
+        if observation
+            .timestamp
+            .is_some_and(|timestamp| timestamp != frame.timestamp)
+        {
+            return Err(failed(format!(
+                "upstream OCR observation {index} timestamp does not match its decoded frame"
+            )));
+        }
+        let timebase = media_core::Timebase::try_new(
+            frame.timestamp.timebase.num,
+            frame.timestamp.timebase.den,
+        )
+        .map_err(|error| failed(format!("invalid source OCR timebase: {error}")))?;
+        let timestamp = media_core::Timestamp::try_new(frame.timestamp.pts, timebase)
+            .map_err(|error| failed(format!("invalid source OCR timestamp: {error}")))?;
+        anchors.push(ExactAnchorV1 {
+            receipt: run.receipt.clone(),
+            record_id: format!("obs-{index}"),
+            timing: ExactAnchorTimingV1::Instant { timestamp },
+            frame_index: Some(frame.frame_index),
+            start_frame: None,
+            end_frame: None,
+        });
+    }
+    if anchors.len() != run.observations.len() {
+        return Err(failed(
+            "exact OCR anchors must cover every OCR observation".to_string(),
+        ));
+    }
+    Ok(anchors)
 }
 
 /// Maps one upstream scene-aware OCR output into a [`VisibleTextRun`] (pure; no I/O).

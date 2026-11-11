@@ -18,16 +18,16 @@ moenarch-corpus-core = { git = "https://github.com/moritzbrantner/moenarch-found
 moenarch-media-core = { git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "d5c0d8ff8989cde41e7754deba78d4f6493d60f6" }
 # Canonical scene producer (#27): visual-analysis at an exact public revision. Detection
 # itself is scenedetect-core, reached only through these crates.
-video-analysis-ffmpeg = { package = "moenarch-video-analysis-ffmpeg", git = "https://github.com/moritzbrantner/visual-analysis", rev = "936e2c481a6a53c80d6620d702dbcc273d797171" }
-video-analysis-ingest = { package = "moenarch-video-analysis-ingest", git = "https://github.com/moritzbrantner/visual-analysis", rev = "936e2c481a6a53c80d6620d702dbcc273d797171" }
+video-analysis-ffmpeg = { package = "moenarch-video-analysis-ffmpeg", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4" }
+video-analysis-ingest = { package = "moenarch-video-analysis-ingest", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4" }
 tempfile = "3.23.0"
 # Visible-text producer (#33): visual-analysis OCR backends, the scene-aware OCR sampling
 # path (video-analysis-ingest feature `ocr`) and text tracking, all at the scene producer's
 # revision. Only `media-intelligence-analysis`'s opt-in `visual-analysis-ocr` feature uses them.
-image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "936e2c481a6a53c80d6620d702dbcc273d797171" }
-image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "936e2c481a6a53c80d6620d702dbcc273d797171" }
-video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "936e2c481a6a53c80d6620d702dbcc273d797171" }
-video-analysis-recognition = { package = "moenarch-video-analysis-recognition", git = "https://github.com/moritzbrantner/visual-analysis", rev = "936e2c481a6a53c80d6620d702dbcc273d797171" }
+image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4" }
+image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4" }
+video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4" }
+video-analysis-recognition = { package = "moenarch-video-analysis-recognition", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4" }
 num-rational = "0.4.2"
 # Canonical speech producer (#32): audio-analysis transcription at an exact public revision.
 # Only `media-intelligence-analysis`'s opt-in `audio-analysis` feature uses it. ASR,
